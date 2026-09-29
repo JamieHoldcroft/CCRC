@@ -6,6 +6,9 @@
 outputs/*
 !outputs/.gitkeep
 
+# Ignore personal project overview file
+PROJECT_BRIEFING.md
+
 # Python
 __pycache__/
 *.py[cod]
