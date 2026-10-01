@@ -42,12 +42,25 @@ def _clean(ds):
     return ds.rename({k: v for k, v in RENAME.items() if k in ds.variables})
 
 
+def vpd_from_humidity(ds):
+    """VPD (kPa) from Tair, Qair and Psurf: the humidity the models were forced with.
+
+    The PLUMBER2 VPD variable is labelled hPa but holds kPa at most sites, and at
+    AU-ASM, AU-Cow, AU-TTE, AU-Ync and AU-Rob it does not match the other humidity
+    variables at all. Recomputing it removes both problems.
+    """
+    t = ds.Tair - 273.15
+    es = 0.6108 * np.exp(17.27 * t / (t + 237.3))                      # kPa, Tetens
+    e = ds.Qair * (ds.Psurf / 1000) / (0.622 + 0.378 * ds.Qair)       # kPa
+    return (es - e).clip(min=0)
+
+
 def load_site(met_path, flux_path):
     """Load one PLUMBER2 site (Met + Flux files) into a single Dataset.
 
     Adds:
         Tair_C     air temperature in degC
-        VPD_kPa    vapour pressure deficit in kPa
+        VPD_kPa    vapour pressure deficit in kPa, recomputed (see vpd_from_humidity)
         Precip_mm  rainfall per time step in mm
         measured_<var>  True where <var>_qc == 0 (measured, not gap-filled)
     """
@@ -66,8 +79,9 @@ def load_site(met_path, flux_path):
 
     ds["Tair_C"] = ds.Tair - 273.15
     ds["Tair_C"].attrs = {"units": "degC", "long_name": "Near surface air temperature"}
-    ds["VPD_kPa"] = ds.VPD / 10.0
-    ds["VPD_kPa"].attrs = {"units": "kPa", "long_name": "Vapour pressure deficit"}
+    ds["VPD_kPa"] = vpd_from_humidity(ds)
+    ds["VPD_kPa"].attrs = {"units": "kPa", "long_name": "Vapour pressure deficit",
+                           "method": "computed from Tair, Qair, Psurf (Tetens)"}
     ds["Precip_mm"] = ds.Precip * dt  # kg/m2/s * s = mm per step
     ds["Precip_mm"].attrs = {"units": "mm per time step", "long_name": "Precipitation"}
 

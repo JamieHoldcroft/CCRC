@@ -9,6 +9,7 @@ Getting started code notes:
     1. `ds.Qle.sel(source='JULES', time='2013-01-01 00:30')` # by label (preferred)
     2. `ds.Qle.isel(source=1, time=1)` # by position, xarray
     3. `ds.Qle.values[1, 1]` # raw numpy 
+6. Models missing flux sites: QUINCY: Ync, ORCHIDEE2: Rob and Wrr, ORCHIDEE3: Rob and Wrr
 
 
 # General notes

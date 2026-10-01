@@ -9,6 +9,8 @@ dependencies:
   - pandas
   - xarray
   - netcdf4
+  - cftime
+  - pyyaml
   - scipy
   - matplotlib
   - dask

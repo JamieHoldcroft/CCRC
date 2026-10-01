@@ -1,0 +1,232 @@
+# Every model output used to build data/harmonised/<SITE>.nc, and how to correct it.
+# Read by ccrc/harmonise.py. Raw files in data/models/ are never modified.
+#
+# Fields
+#   role     focus       CABLE / JULES, the head-to-head pair
+#            lsm         other PLUMBER2 land models (count towards n_models_fail)
+#            sensitivity built into the file but not counted in n_models_fail
+#            coarse      not half-hourly; skipped by the build (kept for annual hydrology)
+#            excluded    skipped by the build: timing or forcing could not be trusted
+#            benchmark   out-of-sample empirical benchmarks (Qle, Qh, NEE only)
+#            baseline    simple physical models (Manabe bucket, Penman-Monteith; Qle, Qh)
+#   family   models that share code. Count failures per family, not per run.
+#   colour   fixed plot colour
+#   stamp    what each time stamp marks: start | middle | end of its step.
+#            Checked against the inventory (outputs/inventory/files.csv) and,
+#            for models that echo SWdown, by the forcing-echo lag in the build.
+#   rename   model name -> standard name, only where they differ
+#   sign     standard name -> -1 where the model's sign convention is flipped.
+#            Found by correlating each flux with the obs (the build warns on r < 0).
+#   units    standard name -> units to use instead of the file's units attribute
+#   shift_steps    per-site extra shift (in time steps) for files with a known offset
+#   shift_minutes  extra shift for every site, found by the forcing-echo check
+#   pft      {dim, weight} for fluxes reported per plant functional type
+#   exclude_sites  sites where this model's file is unusable
+#   drop_vars      fluxes from this model that are unusable everywhere (set to NaN)
+#
+# Units are not set here: ccrc/harmonise.py reads each variable's units attribute
+# and converts it (stopping with an error on any unit it does not recognise).
+# Carbon fluxes in kg or g per m2 per s are kg/g of CARBON (confirmed by Jamie).
+
+models:
+  CABLE:
+    role: focus
+    family: CABLE
+    colour: "#1f77b4"
+    stamp: end
+
+  JULES:
+    role: focus
+    family: JULES
+    colour: "#d62728"
+    stamp: end
+
+  BEPS:
+    # Only Qle and GPP, and no radiation output to verify its timing. Excluded by Jamie, 2026-10-01.
+    role: excluded
+    family: BEPS
+    colour: "#8c564b"
+    stamp: start
+
+  CHTESSEL_1:
+    role: lsm
+    family: CHTESSEL
+    colour: "#9467bd"
+    stamp: start
+    sign: {GPP: -1}  # GPP stored as negative (uptake); corr with obs was -0.68
+
+  CHTESSEL_ERA5_3:
+    # Not forced with the tower data: its SWnet matches the obs SWdown only at
+    # r=0.92 and 1.5 h late (AU-Cum). ERA5 forcing? Excluded by Jamie, 2026-10-01.
+    role: excluded
+    family: CHTESSEL
+    colour: "#9467bd"
+    stamp: start
+    sign: {GPP: -1}  # GPP stored as negative (uptake); corr with obs was -0.68
+
+  CHTESSEL_ERA5_4:
+    # Not forced with the tower data: its SWnet matches the obs SWdown only at
+    # r=0.92 and 1.5 h late (AU-Cum). ERA5 forcing? Excluded by Jamie, 2026-10-01.
+    role: excluded
+    family: CHTESSEL
+    colour: "#9467bd"
+    stamp: start
+    sign: {GPP: -1}  # GPP stored as negative (uptake); corr with obs was -0.68
+
+  CLM5:
+    role: lsm
+    family: CLM
+    colour: "#2ca02c"
+    stamp: end
+    rename: {hfls: Qle, hfss: Qh, hfds: Qg, gpp: GPP, et: Evap}
+
+  EntTBM:
+    role: lsm
+    family: EntTBM
+    colour: "#e377c2"
+    stamp: start
+    # Its SWnet is an exact copy of the obs SWdown pattern but 60 min late at
+    # AU-Cum, AU-How, AU-ASM (2 steps) and AU-Tum (1 hourly step).
+    shift_minutes: -60
+
+  GFDL:
+    role: lsm
+    family: GFDL
+    colour: "#7f7f7f"
+    stamp: start
+    sign: {NEE: -1}  # NEE stored as uptake-positive; corr with obs was -0.62
+    # AU-Ync: starts 11 h after the obs, and its SWdown matches the obs SWdown at
+    # no lag within +-15 h (best r = 0.41), so it is not a simple time shift.
+    exclude_sites: [AU-Ync]
+
+  MATSIRO:
+    role: lsm
+    family: MATSIRO
+    colour: "#bcbd22"
+    stamp: start
+
+  MuSICA:
+    role: lsm
+    family: MuSICA
+    colour: "#17becf"
+    # Units are "hours since <date> +09:00". The build ignores the "+09:00"
+    # label: 0.25 h after local midnight is the middle of the first step.
+    stamp: middle
+    # NEE barely tracks the obs anywhere (r -0.07..0.35) while GPP is fine.
+    drop_vars: [NEE]
+
+  NoahMP:
+    role: lsm
+    family: NoahMP
+    colour: "#ff7f0e"
+    stamp: start
+    sign: {NEE: -1}  # uptake-positive; corr with obs was -0.75
+    # NEE "g m-2 s-1" is grams of CO2, not C: as carbon its midday mean is 6x the
+    # obs; as CO2 it matches the obs and other models. INFERRED, not documented.
+    units: {NEE: "g CO2 m-2 s-1"}
+
+  ORCHIDEE2:
+    role: lsm
+    family: ORCHIDEE
+    colour: "#aec7e8"
+    stamp: middle
+    # GPP and NEE are given per plant type, already scaled by that type's cover:
+    # each type's GPP is roughly proportional to its vegetfrac (AU-GWW, AU-How),
+    # and weighting again by vegetfrac made arid-site GPP 5-20x too small.
+    pft: {dim: veget}   # plain sum over plant types
+
+  ORCHIDEE3:
+    role: lsm
+    family: ORCHIDEE
+    colour: "#aec7e8"
+    stamp: middle
+    sign: {Qg: -1}   # Qg positive upward; corr with obs was -0.61 (ORCHIDEE2 is fine)
+    # GPP and NEE are given per plant type, already scaled by that type's cover:
+    # each type's GPP is roughly proportional to its vegetfrac (AU-GWW, AU-How),
+    # and weighting again by vegetfrac made arid-site GPP 5-20x too small.
+    pft: {dim: veget}   # plain sum over plant types
+
+  QUINCY:
+    role: lsm
+    family: QUINCY
+    colour: "#98df8a"
+    stamp: start
+    # AU-Wrr Qh: mean 190 W/m2 (obs 5), peaks at 22:00, range -627..1518. Broken.
+    exclude_sites: [AU-Wrr]
+
+  STEMMUS-SCOPE:
+    role: lsm
+    family: STEMMUS-SCOPE
+    colour: "#c5b0d5"
+    stamp: start
+    sign: {NEE: -1}  # uptake-positive; corr with obs was -0.66
+
+  LPJ-GUESS:
+    role: coarse   # monthly output
+    family: LPJ-GUESS
+    colour: "#c49c94"
+    stamp: start
+    rename: {hfls: Qle, hfss: Qh, gpp: GPP, et: Evap, nep: NEE}
+    sign: {NEE: -1}  # nep = -NEE
+
+  SDGVM:
+    role: coarse   # daily output
+    family: SDGVM
+    colour: "#f7b6d2"
+    stamp: start
+
+  # --- Empirical benchmarks (PLUMBER2, modelevaluation.org) ------------------
+  # All are out-of-sample: trained on other sites, never on the site they
+  # predict. Trained on measured (non-gap-filled) obs, i.e. the "_raw" set
+  # (RF's file history names RF_raw; the others are assumed to match). They
+  # report only Qle, Qh and NEE, with time stamps at the start of each step.
+  1lin:
+    role: benchmark
+    family: 1lin
+    colour: "#bdbdbd"
+    stamp: start   # linear regression on SWdown
+
+  3km27:
+    role: benchmark
+    family: 3km27
+    colour: "#969696"
+    stamp: start   # k-means (27 clusters) + regression on SWdown, Tair, RH
+
+  6km729:
+    role: benchmark
+    family: 6km729
+    colour: "#737373"
+    stamp: start   # k-means (729 clusters) on 6 inputs
+
+  6km729lag:
+    role: benchmark
+    family: 6km729lag
+    colour: "#525252"
+    stamp: start   # as 6km729 plus lagged rain and temperature ("shortlag")
+
+  RF:
+    role: benchmark
+    family: RF
+    colour: "#8c6d31"
+    stamp: start   # random forest
+
+  LSTM:
+    role: benchmark
+    family: LSTM
+    colour: "#252525"
+    stamp: start   # neural network with memory; the strongest benchmark
+
+  # --- Simple physical baselines (run in JULES' framework) --------------------
+  Manabe:
+    role: baseline
+    family: Manabe
+    colour: "#e7ba52"
+    stamp: end     # JULES-style output: first stamp 00:30, has time_bounds
+    rename: {ls_rain: Rainf}   # rain echo, for the timing check
+
+  PenmanMonteith:
+    role: baseline
+    family: PenmanMonteith
+    colour: "#bd9e39"
+    stamp: end
+    rename: {ls_rain: Rainf}
