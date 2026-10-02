@@ -1,0 +1,35 @@
+# Thresholds for scripts/08_benchmark_loss.py. Every value here is written into
+# the output CSV, so each detected period records how it was found.
+
+benchmark_loss:
+  models: [CABLE, JULES]          # which models to test (any source in the site files)
+  variables: [Qle, Qh]            # NEE also works, but JULES has none
+  benchmarks: [1lin, 3km27, 6km729, 6km729lag, RF, LSTM]
+
+  # A day counts only if the tower measured at least this share of its steps
+  # (night-time fluxes are often gap-filled, so 1.0 would drop most days).
+  min_measured_fraction: 0.25
+
+  # Daily loss = model's mean absolute error - best benchmark's mean absolute
+  # error that day (W/m2 or umol/m2/s). Positive = worse than every benchmark.
+  # It is smoothed with a centred rolling mean to remove day-to-day weather noise.
+  smooth_days: 7
+
+  # A smoothed day is flagged when its loss is above this percentile of the same
+  # model's smoothed loss at the same site for the same variable (stricter: 99th), AND above
+  # min_loss (so a model that is good everywhere is not forced to have failures).
+  percentile: 99
+  min_loss: 50                    # W/m2 for Qle/Qh; use ~3 for NEE
+
+  # Flagged days are joined into periods, bridging gaps of up to max_gap_days,
+  # and only periods of at least min_days are kept.
+  max_gap_days: 1
+  min_days: 7
+
+  # Episode test against chronic bias: the period's mean loss must be at least
+  # this many times the model's mean loss over the site's whole record.
+  min_loss_ratio: 4
+
+  # Data-quality test: over the whole period, at least this share of the tower's
+  # steps must be measured (not gap-filled), or the "failure" may be the tower's.
+  min_period_measured: 0.5

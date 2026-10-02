@@ -121,9 +121,9 @@ models:
     colour: "#ff7f0e"
     stamp: start
     sign: {NEE: -1}  # uptake-positive; corr with obs was -0.75
-    # NEE "g m-2 s-1" is grams of CO2, not C: as carbon its midday mean is 6x the
-    # obs; as CO2 it matches the obs and other models. INFERRED, not documented.
-    units: {NEE: "g CO2 m-2 s-1"}
+    # NEE "g m-2 s-1" is grams of carbon. Read this way NoahMP takes up more
+    # carbon than the obs and has a ~+190% WUE bias, matching PLUMBER2 Figs 3-4
+    # (Abramowitz et al. 2024, p. 5526). An earlier g-CO2 reading contradicted that.
 
   ORCHIDEE2:
     role: lsm

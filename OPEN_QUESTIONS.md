@@ -6,11 +6,12 @@ for now, so the choice can be revisited. Evidence lives in `outputs/build/`
 
 ## Model outputs
 
-1. **NoahMP NEE units and sign.** The file says `g m-2 s-1`. Read as grams of
-   carbon, the midday mean at AU-Cum is about 6x the obs; read as grams of CO2
-   it matches the obs and the other models. Its sign is also uptake-positive.
-   *For now:* treated as g CO2 and sign flipped (`config/models.yaml`).
-   INFERRED, not documented. Ask Anna or the NoahMP team.
+1. **NoahMP NEE units and sign.** The file says `g m-2 s-1`. First read as g
+   CO2 (as carbon its midday uptake looked 6x the obs). PLUMBER2 (p. 5526,
+   Figs 3-4) says Noah-MP over-predicts carbon uptake with a very high WUE bias;
+   read as grams of carbon it does exactly that (more uptake than obs at 73% of
+   AU sites, WUE error +191%), read as CO2 it does not (-21%).
+   *Decision (2026-10-02):* grams of carbon. Sign still flipped (uptake-positive).
 2. **CHTESSEL_ERA5_3 / _4 forcing.** Their net shortwave matches the tower
    sunlight only at r = 0.87-0.95, with lags that change sign between sites
    (CHTESSEL_1 matches exactly). They look forced by ERA5, not the tower.

@@ -36,7 +36,7 @@ MODELS = {
     "LPJ-GUESS": "LPJ-GUESS_{}_plumber.nc",
     "NoahMP": "NoahMPv401_UAlb_r1a_{}.nc",
     "QUINCY": "QUINCY_{}.nc",
-    # Empirical benchmarks and simple physical baselines (added 2026-10-01)
+    # Empirical benchmarks and simple physical baselines
     "1lin": "Emp1lin_{}.nc",
     "3km27": "3km27_{}_robust_output.nc",
     "6km729": "6km729_{}_robust_output.nc",
