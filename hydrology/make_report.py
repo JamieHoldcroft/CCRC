@@ -1,16 +1,13 @@
-"""Build hydrology/et_signatures_report.pdf from the tables written by
-outputs/reports/collect_et_results.py (run that first, from the repo root).
-
-    python outputs/reports/collect_et_results.py
-    python outputs/reports/make_et_report.py
-"""
 import textwrap
 from pathlib import Path
 
 import matplotlib
+import matplotlib.dates
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+import cartopy.crs as ccrs
+import cartopy.feature as cfeature
 import numpy as np
 import pandas as pd
 from matplotlib.backends.backend_pdf import PdfPages
@@ -20,7 +17,11 @@ HERE = Path(__file__).resolve().parent
 OUT = HERE / "results"          # tables from collect_results.py
 FIGS = HERE / "figures"         # every figure page is also saved here
 FIGS.mkdir(exist_ok=True)
-d = pd.read_csv(OUT / "et_sites.csv")
+
+###############################################    CHANGE THIS TO 'et_sites.csv' FOR TRUE LAT/LONG    ############################################
+# d = pd.read_csv(OUT / "et_sites.csv")
+d = pd.read_csv(OUT / "et_sites_lat_changed.csv")
+
 clim = pd.read_csv(OUT / "et_monthly_clim.csv")
 eb = pd.read_csv(OUT / "et_eb.csv").set_index("site")
 
@@ -757,3 +758,245 @@ w.bullets([
 w.close()
 pdf.close()
 print(f"wrote {HERE / 'et_signatures_report.pdf'} ({w.page} pages)")
+
+
+# ==========================================================================
+# Extra figures (PNG only, not in the PDF): error maps and WS time series
+# ==========================================================================
+# These are saved straight into hydrology/figures/:
+#   map_<metric>.png    four maps of Australia per signature, one dot per site
+#   ws_timeseries.png   water stress year by year, obs vs CABLE vs JULES
+
+# Maps are drawn with cartopy (install once with:  conda install -c conda-forge cartopy).
+# LONLAT says "these numbers are longitude and latitude in degrees".
+# MAP_PROJ is how the round Earth is flattened onto the page: a Lambert conformal
+# projection centred on Australia, the usual choice for Australian maps.
+LONLAT = ccrs.PlateCarree()
+MAP_PROJ = ccrs.LambertConformal(central_longitude=134, central_latitude=-27,
+                                 standard_parallels=(-18, -36),
+                                 cutoff=10)   # cartopy's default cuts the map off at 30 S
+                                              # (it assumes the north); 10 = stop at 10 N
+
+# The signatures to map: (column in et_sites.csv, title, units of the error)
+MAP_METRICS = [("ET_median", "1 Long-term median ET", "mm/yr"),
+               ("CV_annual", "2 CV_annual", "-"),
+               ("TSP", "4 TSP (month of peak ET)", "months"),
+               ("CV_monthly", "5 CV_monthly", "-"),
+               ("WS", "6 WS (water stress)", "-"),
+               ("R", "8 R (event responsiveness)", "-")]
+
+
+def month_difference(a, b):
+    """a - b for months (1-12), going the short way round the calendar.
+    December (12) minus January (1) is -1, not +11. The answer is -6 ... +5."""
+    return ((a - b + 6) % 12) - 6
+
+
+def draw_australia(ax):
+    """Land, sea and coastline from cartopy; site dots go on top."""
+    ax.set_extent([112, 155, -45, -9], crs=LONLAT)     # west, east, south, north
+    ax.add_feature(cfeature.LAND, facecolor="#eeeeee", zorder=0)
+    ax.add_feature(cfeature.OCEAN, facecolor="#f7fbff", zorder=0)
+    ax.coastlines(resolution="50m", color="0.4", linewidth=0.7)
+    ax.add_feature(cfeature.STATES, edgecolor="0.75", linewidth=0.4)   # state borders
+    grid = ax.gridlines(draw_labels=True, x_inline=False, y_inline=False,
+                        color="0.85", linewidth=0.5)
+    grid.top_labels = False
+    grid.right_labels = False
+    grid.xlabel_style = {"size": 7}
+    grid.ylabel_style = {"size": 7}
+
+
+def error_map(ax, lon, lat, err, vmax, title, units):
+    """One dot per site, coloured by the error. Red = too high, blue = too low."""
+    draw_australia(ax)
+    dots = ax.scatter(lon, lat, c=err, cmap="RdBu_r", vmin=-vmax, vmax=vmax,
+                      s=70, edgecolor="k", linewidth=0.6, zorder=2, transform=LONLAT)
+    cbar = plt.colorbar(dots, ax=ax, shrink=0.8)
+    cbar.set_label(units)
+    ax.set_title(title)
+
+
+def sign_category(err_c, err_j):
+    """Name the agreement between the two models' errors at each site."""
+    labels = []
+    for ec, ej in zip(err_c, err_j):
+        if np.isnan(ec) or np.isnan(ej):
+            labels.append("no value")
+        elif ec == 0 and ej == 0:
+            labels.append("both match obs")
+        elif ec < 0 and ej < 0:
+            labels.append("both too low")
+        elif ec > 0 and ej > 0:
+            labels.append("both too high")
+        else:
+            labels.append("disagree on sign")
+    return pd.Series(labels, index=err_c.index)
+
+
+SIGN_COLOURS = {"both too low": "#2166ac", "both too high": "#b2182b",
+                "disagree on sign": "0.6", "both match obs": "white"}
+
+
+def sign_map(ax, lon, lat, category, title):
+    draw_australia(ax)
+    for name, colour in SIGN_COLOURS.items():
+        here = category == name
+        if here.sum() == 0:
+            continue
+        ax.scatter(lon[here], lat[here], color=colour, s=70, edgecolor="k", linewidth=0.6,
+                   zorder=2, transform=LONLAT, label=f"{name} ({here.sum()})")
+    ax.legend(loc="lower left", fontsize=7, framealpha=0.9)
+    ax.set_title(title)
+
+
+for col, title, units in MAP_METRICS:
+    # Which sites to show. CV_annual needs at least 3 complete years,
+    # as everywhere else in this report.
+    sites = o.index if col != "CV_annual" else o.index[o.years >= 3]
+    lon, lat = o.loc[sites, "lon"], o.loc[sites, "lat"]
+
+    # Step 1: the errors (model minus obs), and CABLE minus JULES.
+    # For TSP the values are months, so subtract the short way round the year.
+    if col == "TSP":
+        err_c = month_difference(c.loc[sites, col], o.loc[sites, col])
+        err_j = month_difference(j.loc[sites, col], o.loc[sites, col])
+        err_cj = month_difference(c.loc[sites, col], j.loc[sites, col])
+    else:
+        err_c = c.loc[sites, col] - o.loc[sites, col]
+        err_j = j.loc[sites, col] - o.loc[sites, col]
+        err_cj = err_c - err_j          # the same as CABLE - JULES; obs cancels out
+
+    # Step 2: one colour scale for the two model maps, so the same colour means
+    # the same error in both. The scale is symmetric so white is exactly zero.
+    vmax = np.nanmax(np.abs(np.concatenate([err_c.values, err_j.values])))
+    vmax_cj = np.nanmax(np.abs(err_cj.values))
+
+    # Step 3: draw the four maps
+    fig, axes = plt.subplots(2, 2, figsize=(11, 9.5),
+                             subplot_kw={"projection": MAP_PROJ})   # every panel is a map
+    error_map(axes[0, 0], lon, lat, err_c, vmax, "CABLE error (CABLE - obs)", units)
+    error_map(axes[0, 1], lon, lat, err_j, vmax, "JULES error (JULES - obs)", units)
+    error_map(axes[1, 0], lon, lat, err_cj, vmax_cj,
+              "CABLE - JULES (red: CABLE higher)", units)
+    sign_map(axes[1, 1], lon, lat, sign_category(err_c, err_j),
+             "Do CABLE and JULES err the same way?")
+    fig.suptitle(f"{title}: model errors at {len(sites)} sites", fontsize=13, weight="bold")
+    fig.tight_layout()
+    fig.savefig(FIGS / f"map_{col}.png", dpi=200)
+    plt.close(fig)
+    print(f"wrote {FIGS / f'map_{col}.png'}")
+
+
+# --------------------------------------------------------------------------
+# Water stress (WS) year by year. WS = 1 - ET/PET for each complete year,
+# the same formula as signature 6 but for one year at a time (from
+# collect_results.py, et_annual.csv). Sites go wettest to driest.
+# --------------------------------------------------------------------------
+annual = pd.read_csv(OUT / "et_annual.csv")
+fig, axes = plt.subplots(6, 4, figsize=(11.69, 14), sharey=True)
+for ax, site in zip(axes.flat, order):
+    for source in ["obs", "CABLE", "JULES"]:
+        one = annual[(annual.site == site) & (annual.source == source)]
+        ax.plot(one.year, one.WS, marker="o", markersize=3, color=MCOL[source], label=source)
+    ax.axhline(0, color="0.7", linewidth=0.6)
+    ax.set_title(f"{site} ({GROUP[site]})", fontsize=8)
+    ax.xaxis.set_major_locator(matplotlib.ticker.MaxNLocator(integer=True, nbins=4))
+    ax.ticklabel_format(axis="x", useOffset=False)     # show 2016, not "0 + 2.016e3"
+    ax.tick_params(labelsize=7)
+for ax in axes.flat[len(order):]:
+    ax.axis("off")                     # 22 sites, 24 panels: hide the spare two
+for ax in axes[:, 0]:
+    ax.set_ylabel("WS = 1 - ET/PET")
+axes[0, 0].legend(fontsize=7)
+fig.suptitle("Water stress each year, wettest site to driest\n"
+             "(0 = ET keeps up with PET, 1 = almost no ET)", fontsize=12, weight="bold")
+fig.tight_layout()
+fig.savefig(FIGS / "ws_timeseries.png", dpi=200)
+plt.close(fig)
+print(f"wrote {FIGS / 'ws_timeseries.png'}")
+
+
+# --------------------------------------------------------------------------
+# Water stress month by month: WS = 1 - ET/PET for each complete month
+# (et_monthly.csv from collect_results.py). 12x more points than the yearly
+# plot, so you can see the seasons and individual droughts. In winter PET is
+# small, so WS swings far below zero when ET is larger than PET; the y axis is
+# cut at -1 and those months run off the bottom of the panel.
+# --------------------------------------------------------------------------
+monthly = pd.read_csv(OUT / "et_monthly.csv", parse_dates=["month"])
+fig, axes = plt.subplots(6, 4, figsize=(11.69, 14), sharey=True)
+for ax, site in zip(axes.flat, order):
+    for source in ["obs", "CABLE", "JULES"]:
+        one = monthly[(monthly.site == site) & (monthly.source == source)]
+        ws = one.set_index("month").WS
+        # Fill in missing (incomplete) months with NaN so the line breaks there
+        # instead of joining across the gap.
+        all_months = pd.date_range(ws.index.min(), ws.index.max(), freq="MS")
+        ws = ws.reindex(all_months)
+        ax.plot(ws.index, ws.values, color=MCOL[source], linewidth=0.8, label=source)
+    ax.axhline(0, color="0.7", linewidth=0.6)
+    ax.set_ylim(-1, 1)
+    ax.set_title(f"{site} ({GROUP[site]})", fontsize=8)
+    ax.xaxis.set_major_locator(matplotlib.dates.YearLocator(base=2))
+    ax.xaxis.set_major_formatter(matplotlib.dates.DateFormatter("%Y"))
+    ax.tick_params(labelsize=7)
+for ax in axes.flat[len(order):]:
+    ax.axis("off")
+for ax in axes[:, 0]:
+    ax.set_ylabel("WS = 1 - ET/PET")
+axes[0, 0].legend(fontsize=7)
+fig.suptitle("Water stress each month, wettest site to driest\n"
+             "(0 = ET keeps up with PET, 1 = almost no ET; y axis cut at -1)",
+             fontsize=12, weight="bold")
+fig.tight_layout()
+fig.savefig(FIGS / "ws_monthly.png", dpi=200)
+plt.close(fig)
+print(f"wrote {FIGS / 'ws_monthly.png'}")
+
+
+# --------------------------------------------------------------------------
+# The same two water stress plots, but one PNG per site, so each site can be
+# looked at on its own at a readable size. Saved into figures/WS_timeseries/:
+#   <SITE>_WS_annual.png    WS each year   (from et_annual.csv)
+#   <SITE>_WS_monthly.png   WS each month  (from et_monthly.csv)
+# --------------------------------------------------------------------------
+WS_DIR = FIGS / "WS_timeseries"
+WS_DIR.mkdir(exist_ok=True)          # make the subfolder if it isn't there yet
+
+for site in order:
+    # Yearly
+    fig, ax = plt.subplots(figsize=(8, 4))
+    for source in ["obs", "CABLE", "JULES"]:
+        one = annual[(annual.site == site) & (annual.source == source)]
+        ax.plot(one.year, one.WS, marker="o", markersize=4, color=MCOL[source], label=source)
+    ax.axhline(0, color="0.7", linewidth=0.6)
+    ax.xaxis.set_major_locator(matplotlib.ticker.MaxNLocator(integer=True))
+    ax.ticklabel_format(axis="x", useOffset=False)
+    ax.set_ylabel("WS = 1 - ET/PET")
+    ax.set_title(f"{site} ({GROUP[site]}): water stress each year")
+    ax.legend(fontsize=8)
+    fig.tight_layout()
+    fig.savefig(WS_DIR / f"{site}_WS_annual.png", dpi=200)
+    plt.close(fig)
+
+    # Monthly (same gap handling and y limits as the all-sites plot above)
+    fig, ax = plt.subplots(figsize=(12, 4))
+    for source in ["obs", "CABLE", "JULES"]:
+        one = monthly[(monthly.site == site) & (monthly.source == source)]
+        ws = one.set_index("month").WS
+        all_months = pd.date_range(ws.index.min(), ws.index.max(), freq="MS")
+        ws = ws.reindex(all_months)
+        ax.plot(ws.index, ws.values, color=MCOL[source], linewidth=0.9, label=source)
+    ax.axhline(0, color="0.7", linewidth=0.6)
+    ax.set_ylim(-1, 1)
+    ax.xaxis.set_major_locator(matplotlib.dates.YearLocator())
+    ax.xaxis.set_major_formatter(matplotlib.dates.DateFormatter("%Y"))
+    ax.set_ylabel("WS = 1 - ET/PET")
+    ax.set_title(f"{site} ({GROUP[site]}): water stress each month (y axis cut at -1)")
+    ax.legend(fontsize=8)
+    fig.tight_layout()
+    fig.savefig(WS_DIR / f"{site}_WS_monthly.png", dpi=200)
+    plt.close(fig)
+
+print(f"wrote {2 * len(order)} per-site WS plots to {WS_DIR}")

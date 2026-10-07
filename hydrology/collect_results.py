@@ -1,4 +1,4 @@
-"""Collect everything the paper (and the v1 report) needs into hydrology/results/.
+"""Collect everything the paper needs into hydrology/results/.
 
 Run from the repo root, or from anywhere:
     python hydrology/collect_results.py
@@ -11,6 +11,9 @@ Writes to hydrology/results/:
     et_sites.csv        one row per site x source: the Table 2 signatures, the
                         dry/wet-season ratio, and site metadata
     et_monthly_clim.csv mean monthly ET, rain and PET per site and source
+    et_annual.csv       ET, PET and water stress (WS) for every complete year,
+                        per site and source (for the WS time series)
+    et_monthly.csv      the same for every complete month (monthly WS time series)
     et_eb.csv           tower energy gap and energy-balance-corrected tower ET
     drydown_curves.csv  ET against days since rain, per site and source
     drydown_sites.csv   dry-down summary per site and source (half-life etc.)
@@ -118,7 +121,7 @@ def event_composite(et_daily, events):
 
 def main():
     RESULTS.mkdir(parents=True, exist_ok=True)
-    site_rows, clim_rows, eb_rows = [], [], []
+    site_rows, clim_rows, eb_rows, annual_rows, monthly_rows = [], [], [], [], []
     dd_curves, dd_rows, ev_curves, ev_rows = [], [], [], []
 
     for path in sorted(HARMONISED.glob("*.nc")):
@@ -131,6 +134,7 @@ def main():
         rain_daily = ds.Precip_mm.to_series().resample("1D").sum(min_count=1)
         pet_daily = ets.daily_pet(ds)
         pet_monthly = ets.totals(pet_daily, "MS")
+        pet_annual = ets.totals(pet_daily, "YS")
         rain_monthly = ets.totals(rain_daily, "MS")
         rain_clim = rain_monthly.groupby(rain_monthly.index.month).mean()
         pet_clim = pet_monthly.groupby(pet_monthly.index.month).mean()
@@ -171,6 +175,23 @@ def main():
                               "ET_driest3": aet_clim[dry_months].mean(),
                               "ET_wettest3": aet_clim[wet_months].mean(),
                               "dry_wet_ratio": aet_clim[dry_months].mean() / aet_clim[wet_months].mean()})
+            # Water stress year by year: the same formula as signature 6 (WS),
+            # but using one year's ET and PET instead of the whole record
+            for year_start, aet_year in aet_annual.items():
+                if year_start not in pet_annual.index:
+                    continue                    # PET incomplete that year
+                pet_year = pet_annual[year_start]
+                annual_rows.append({"site": site, "source": source, "year": year_start.year,
+                                    "ET": aet_year, "PET": pet_year,
+                                    "WS": (pet_year - aet_year) / pet_year})
+            # ... and month by month
+            for month_start, aet_month in aet_monthly.items():
+                if month_start not in pet_monthly.index:
+                    continue                    # PET incomplete that month
+                pet_month = pet_monthly[month_start]
+                monthly_rows.append({"site": site, "source": source, "month": month_start,
+                                     "ET": aet_month, "PET": pet_month,
+                                     "WS": (pet_month - aet_month) / pet_month})
             for m in range(1, 13):
                 clim_rows.append({"site": site, "source": source, "month": m,
                                   "ET": aet_clim.get(m, np.nan), "rain": rain_clim.get(m, np.nan),
@@ -207,6 +228,8 @@ def main():
     pd.DataFrame(site_rows).to_csv(RESULTS / "et_sites.csv", index=False)
     pd.DataFrame(clim_rows).to_csv(RESULTS / "et_monthly_clim.csv", index=False)
     pd.DataFrame(eb_rows).to_csv(RESULTS / "et_eb.csv", index=False)
+    pd.DataFrame(annual_rows).to_csv(RESULTS / "et_annual.csv", index=False)
+    pd.DataFrame(monthly_rows).to_csv(RESULTS / "et_monthly.csv", index=False)
     pd.concat(dd_curves).to_csv(RESULTS / "drydown_curves.csv", index=False)
     pd.DataFrame(dd_rows).to_csv(RESULTS / "drydown_sites.csv", index=False)
     pd.concat(ev_curves).to_csv(RESULTS / "event_composites.csv", index=False)
