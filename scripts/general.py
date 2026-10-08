@@ -4,39 +4,48 @@ import numpy as np
 import pandas as pd
 import xarray as xr
 
-ds = xr.open_dataset("data/models/JULES/AU-Tum.nc")
-print("JULES\n")
-print(ds.data_vars)
-print(40 * "=")
 
-ds = xr.open_dataset("data/flux/AU-Tum_2002-2017_OzFlux_Flux.nc")
-print("FLUX\n")
-print(ds.data_vars)
+# datasets = sorted(Path("data/harmonised/").glob("*.nc"))
+# for ds in datasets:
+#     print(f"Dataset: {ds.stem}\n")
+#     print(xr.open_dataset(ds).data_vars)
+#     print(40*"=")
 
 
-# earlier check that AU-ASM and AU-Ync hold the same data
+ds = xr.open_dataset("data/met/AU-DaP_2009-2012_OzFlux_Met.nc")
+for attr, data in ds.attrs.items():
+    print(f"{attr}: {data}\n")
 
-ds1 = xr.open_dataset("data/met/AU-ASM_2011-2017_OzFlux_Met.nc")
-ds2 = xr.open_dataset("data/met/AU-Ync_2011-2017_OzFlux_Met.nc")
-ar1 = ds1.Qair.values
-ar2 = ds2.Qair.values
+# print(40 * "=")
 
-for i in range(len(ar1)):
-    if ar1[i] != ar2[i]:
-        print("NOT EQUAL\n")
+# ds = xr.open_dataset("data/flux/AU-Tum_2002-2017_OzFlux_Flux.nc")
+# print("FLUX\n")
+# print(ds.data_vars)
 
-print("DONE Met")
 
-ds3 = xr.open_dataset("data/flux/AU-ASM_2011-2017_OzFlux_Flux.nc")
-ds4 = xr.open_dataset("data/flux/AU-Ync_2011-2017_OzFlux_Flux.nc")
-ar3 = ds3.Qle.values
-ar4 = ds4.Qle.values
+# # earlier check that AU-ASM and AU-Ync hold the same data
 
-for i in range(len(ar1)):
-    if ar3[i] != ar4[i]:
-        print("NOT EQUAL\n")
+# ds1 = xr.open_dataset("data/met/AU-ASM_2011-2017_OzFlux_Met.nc")
+# ds2 = xr.open_dataset("data/met/AU-Ync_2011-2017_OzFlux_Met.nc")
+# ar1 = ds1.Qair.values
+# ar2 = ds2.Qair.values
 
-print("DONE Flux")
+# for i in range(len(ar1)):
+#     if ar1[i] != ar2[i]:
+#         print("NOT EQUAL\n")
+
+# print("DONE Met")
+
+# ds3 = xr.open_dataset("data/flux/AU-ASM_2011-2017_OzFlux_Flux.nc")
+# ds4 = xr.open_dataset("data/flux/AU-Ync_2011-2017_OzFlux_Flux.nc")
+# ar3 = ds3.Qle.values
+# ar4 = ds4.Qle.values
+
+# for i in range(len(ar1)):
+#     if ar3[i] != ar4[i]:
+#         print("NOT EQUAL\n")
+
+# print("DONE Flux")
 
 ###############################################################
 ###############################################################

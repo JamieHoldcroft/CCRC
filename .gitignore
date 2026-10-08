@@ -6,6 +6,8 @@
 outputs/*
 !outputs/.gitkeep
 
+ets.md
+
 # Ignore personal project overview file
 PROJECT_BRIEFING.md
 

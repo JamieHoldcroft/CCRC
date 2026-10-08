@@ -7,20 +7,6 @@ Notes:
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 Getting started code notes:
 1. Reading variables from Xarray Dataset: `ds['Tair']`, `ds.data_vars['Tair']` and `ds.Tair` all give the same DataArray. `ds['Tair']` is the safest, because ds.Tair breaks if a variable name clashes with a method such as `mean`.
 2. Dot `.` access looks through data variables, then coordinates, then attrs. Ambiguous though so best to use `ds.attrs['timestep_s']` for attributes. Also `.name` exists on a DataArray (`ds.Tair.name` gives `'Tair'`) but not on a Dataset.
