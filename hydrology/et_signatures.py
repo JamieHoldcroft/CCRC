@@ -1,49 +1,8 @@
-"""Evapotranspiration (ET) signatures for the tower (obs), CABLE and JULES.
+"""Evapotranspiration (ET) signatures for the tower (obs), CABLE and JULES."""
 
-Run from the repo root:
-    python hydrology/et_signatures.py            # all sites
-    python hydrology/et_signatures.py AU-How     # one or more named sites
-
-
-CHOICES THAT ARE OURS, NOT THE PAPER'S (change them in the settings below):
-  1. AET from latent heat: ET (mm per step) = Qle / lambda * seconds per step,
-     with lambda = (2.501 - 0.00237 * Tair) * 1e6 J/kg (Tair in degC), the
-     latent heat of vaporisation at that step's air temperature. The paper uses
-     OzFlux ET directly, so it gives no conversion.
-  2. Measured data only: unlike the paper (gap-filled OzFlux ET, v2024_V1,
-     p. 6 lines 122-126) we use only tower data that were measured (qc flag
-     below 20), for ET (Qle), rain (Precip) and the PET inputs (Rnet, Tair, Psurf).
-     Gap-filled steps are dropped, and a day is dropped if less than
-     MIN_MEASURED_PER_DAY (80%) of its steps were measured (see
-     measured_daily). The tower's Qle mask is also applied to CABLE and JULES,
-     so the models are summed over exactly the same steps as the tower.
-  3. Negative ET: the paper drops negative AET values. Half-hourly Qle is often
-     slightly negative at night (dew), so we drop negative DAILY totals instead.
-  4. PET: the paper uses Morton wet-environment PET from SILO, which we don't
-     have. As a SUBSTITUTE we use Priestley-Taylor PET from the tower's net
-     radiation and air temperature (alpha = 1.26). PET describes the weather,
-     not the model, so obs, CABLE and JULES all get the same PET. Lambda in
-     the ET conversion (choice 1) uses Tair as given, gap-filled or not: it
-     changes by only 0.1% per degree, so this has no visible effect.
-  5. Event responsiveness (R): the paper's rainfall threshold is not in Table 2.
-     We use 10 mm/day.
-  6. Completeness: a month or year counts only if at least MIN_COMPLETE (50%)
-     of its days are present. Its total is the mean of the days present times
-     the number of days in the month or year.
-  7. Same days everywhere: a day is used for ET and PET only if obs, CABLE,
-     JULES and PET ALL have a value that day (see analysis_days). So every
-     source's monthly and annual totals, and the PET they are compared with,
-     are built from exactly the same days. Rain keeps its own measured days,
-     because the tower's Qle is often missing on rainy days and rain events
-     would otherwise be lost.
-"""
-
-import sys
 from pathlib import Path
-
 import numpy as np
 import pandas as pd
-import xarray as xr
 
 # ============================================================================
 # Settings
@@ -55,7 +14,7 @@ PT_ALPHA = 1.26                  # Priestley-Taylor coefficient
 EVENT_RAIN_MM = 10.0             # rain day threshold for R (mm/day)
 EVENT_WINDOW_DAYS = 10           # look for max ET over days i ... i+10
 MIN_COMPLETE = 0.001               # share of days needed for a month or year to count
-MIN_MEASURED_PER_DAY = 0.001       # a day counts if >= 50% of its steps were measured (qc < 20)
+MIN_MEASURED_PER_DAY = 0.001       # a day counts if >= x% of its steps were measured (qc < 20)
 
 
 def latent_heat(tair_c):
@@ -82,6 +41,14 @@ def measured_daily(per_step, measured, how="sum"):
     how="sum" adds up the kept steps of each day (ET, rain, radiation);
     how="mean" averages them (temperature, pressure)."""
     kept = per_step.where(measured)
+
+    """   
+    # Count gap-filled runs of 4 steps or fewer (2 h at half-hourly sites) as measured
+    run_id = (measured != measured.shift()).cumsum()            # give each run of T's or F's its own number
+    run_length = measured.groupby(run_id).transform("size")     # how long the run each step is in
+    measured = measured | (run_length <= 4)                     # short runs become True
+    
+    """
     if how == "sum":
         daily = kept.resample("1D").sum(min_count=1)
     else:
@@ -93,7 +60,7 @@ def measured_daily(per_step, measured, how="sum"):
 # ============================================================================
 # Step 1: daily ET (mm/day) for one source
 # This is the ONLY place ET is made. collect_results.py calls it too, so any
-# change here (e.g. which tower data are used) reaches every output.
+# change here (e.g which tower data are used) reaches every output
 # ============================================================================
 
 
@@ -212,71 +179,3 @@ def event_responsiveness(daily_aet, daily_rain):
     aet_anomaly = np.array(max_aet_values) - np.mean(max_aet_values)
     r = np.corrcoef(rain_anomaly, aet_anomaly)[0, 1]
     return r, len(rain_values)
-
-
-# ============================================================================
-# Step 5: run it site by site and print a small table for each
-# ============================================================================
-def report_site(path):
-    site = path.stem
-    ds = xr.open_dataset(path)
-
-    rain_daily = daily_rain(ds)
-    aet_by_source, pet_daily = analysis_days(ds)          # same days for all
-    pet_monthly = totals(pet_daily, "MS")
-
-    rows = {}
-    years_used = None
-    n_events = None
-    for source in SOURCES:
-        aet_daily = aet_by_source[source]
-        aet_monthly = totals(aet_daily, "MS")
-        aet_annual = totals(aet_daily, "YS")
-        years_used = len(aet_annual)
-        r, n_events = event_responsiveness(aet_daily, rain_daily)
-
-        rows[source] = {
-            "1 Long-term median (mm/yr)": long_term_median(aet_annual),
-            "2 CV_annual": cv_annual(aet_annual),
-            "4 TSP (month 1-12)": tsp(aet_monthly),
-            "5 CV_monthly": cv_monthly(aet_monthly),
-            "6 WS (water stress)": water_stress(aet_monthly, pet_monthly),
-            "8 R (event responsiveness)": r,
-        }
-
-    table = pd.DataFrame(rows)
-    print("=" * 66)
-    print(f"{site}  ({ds.attrs.get('IGBP_veg_short', '?')}, {years_used} complete years, "
-          f"{n_events} rain events > {EVENT_RAIN_MM:g} mm)")
-    print("-" * 66)
-    print(table.round(4).to_string())
-    if years_used < 3:
-        print("  NOTE: fewer than 3 complete years, so 1 and 2 are unreliable here.")
-    print()
-    return table.assign(site=site)
-
-
-def main(sites):
-    if not sites:
-        sites = [p.stem for p in sorted(HARMONISED.glob("*.nc"))]
-    tables = []
-    for site in sites:
-        tables.append(report_site(HARMONISED / f"{site}.nc"))
-
-    # Across all sites: how far CABLE and JULES are from the tower, per metric
-    if len(tables) > 1:
-        print("=" * 66)
-        print("All sites: median of (model - obs) across sites")
-        print("-" * 66)
-        allsites = pd.concat(tables)
-        allsites.index.name = "metric"
-        gap = pd.DataFrame({
-            "CABLE - obs": (allsites.CABLE - allsites.obs).groupby("metric").median(),
-            "JULES - obs": (allsites.JULES - allsites.obs).groupby("metric").median(),
-        })
-        print(gap.round(4).to_string())
-        print("-" * 66)
-
-
-if __name__ == "__main__":
-    main(sys.argv[1:])

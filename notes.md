@@ -1,11 +1,4 @@
-Notes:
-
-1. Jules - cable heat map
-2. WS and ET err heat map
-3. Swinging errors together map
-4. Time series for R events 
-
-
+# Notes:
 
 Getting started code notes:
 1. Reading variables from Xarray Dataset: `ds['Tair']`, `ds.data_vars['Tair']` and `ds.Tair` all give the same DataArray. `ds['Tair']` is the safest, because ds.Tair breaks if a variable name clashes with a method such as `mean`.

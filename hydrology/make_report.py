@@ -1,17 +1,6 @@
-"""Make and save the ET signature figures (no PDF report).
+"""Generates the ET signature figures after having run collect_results.py
 
-Run after collect_results.py:
-    python hydrology/make_report.py
-
-Reads the tables in hydrology/results/ and saves PNGs to hydrology/figures/:
-    fig1_sites_climate.png ... fig8_energy_closure.png   the eight figures
-    map_<metric>.png        error maps, one per signature
-    ws_annual.png, ws_monthly.png, ws_timeseries/<SITE>_WS_*.png   water stress
-
-This script only DRAWS. It computes no ET or PET: every number comes from the
-CSVs that collect_results.py writes. So to test a new PET estimate, or to leave
-out gap-filled tower data, change et_signatures.py, re-run collect_results.py,
-then re-run this script.
+Just reads the tables in hydrology/results/ and saves PNGs to hydrology/figures/
 
 How the script is laid out:
     1. settings (folders, colours, site groups)
@@ -104,7 +93,6 @@ o = d[d.source == "obs"].set_index("site")
 c = d[d.source == "CABLE"].set_index("site")
 j = d[d.source == "JULES"].set_index("site")
 order = o.sort_values("aridity").index          # wettest to driest
-SHORT = list(o.index[o.years < 3])              # sites with < 3 complete years
 
 
 def save_fig(fig, name):
@@ -198,34 +186,6 @@ def fig2_model_vs_tower():
                  fontsize=12, x=0.06, ha="left")
     fig.tight_layout(rect=(0, 0, 1, 0.95))
     save_fig(fig, "fig2_model_vs_tower")
-
-
-def fig3_budyko():
-    """Figure 3: Budyko plot (ET/rain against PET/rain)."""
-    fig, ax = plt.subplots(figsize=(9, 7))
-    phi = np.linspace(0.2, 4.6, 200)
-    budyko = np.sqrt(phi * np.tanh(1 / phi) * (1 - np.exp(-phi)))
-    ax.plot(phi, budyko, color="0.5", lw=1.2, label="Budyko curve")
-    ax.plot([0, 1], [0, 1], color="0.7", lw=0.8, ls=":")
-    ax.axhline(1, color="0.7", lw=0.8, ls=":")
-    for s in order:
-        x = o.loc[s, "aridity"]
-        ys = [o.loc[s, "ET_median"] / o.loc[s, "rain_mm_yr"], c.loc[s, "ET_median"] / o.loc[s, "rain_mm_yr"],
-              j.loc[s, "ET_median"] / o.loc[s, "rain_mm_yr"]]
-        ax.plot([x, x], [min(ys), max(ys)], color="0.8", lw=1, zorder=1)
-        for y, mod, mk in zip(ys, ["obs", "CABLE", "JULES"], ["s", "o", "^"]):
-            ax.scatter(x, y, color=MCOL[mod], marker=mk, s=35, zorder=3)
-        ax.annotate(s.replace("AU-", ""), (x, ys[0]), fontsize=7, xytext=(4, -9), textcoords="offset points")
-    for mod, mk in [("obs", "s"), ("CABLE", "o"), ("JULES", "^")]:
-        ax.scatter([], [], color=MCOL[mod], marker=mk, label=mod if mod != "obs" else "tower")
-    ax.set_xlabel("aridity index  PET / rain")
-    ax.set_ylabel("evaporative index  ET / rain")
-    ax.set_xlim(0, 4.6)
-    ax.set_ylim(0, 1.4)
-    ax.legend(fontsize=8, loc="lower right")
-    ax.set_title("Figure 3. Budyko view: how much of the rain each site and model evaporates", loc="left")
-    fig.tight_layout()
-    save_fig(fig, "fig3_budyko")
 
 
 def fig4_errors_vs_aridity():
@@ -615,7 +575,6 @@ def ws_per_site():
 def main():
     fig1_sites_climate()
     fig2_model_vs_tower()
-    fig3_budyko()
     fig4_errors_vs_aridity()
     fig5_group_errors()
     fig6_seasonal_cycles()

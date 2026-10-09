@@ -5,18 +5,21 @@ import pandas as pd
 import xarray as xr
 
 
+print(xr.open_dataset("data/harmonised/AU-ASM.nc")["Precip"].attrs)
+
+
 # datasets = sorted(Path("data/harmonised/").glob("*.nc"))
 # for ds in datasets:
 #     print(f"Dataset: {ds.stem}\n")
 #     print(xr.open_dataset(ds).data_vars)
 #     print(40*"=")
 
+####################################
+# ds = xr.open_dataset("data/met/AU-DaP_2009-2012_OzFlux_Met.nc")
+# for attr, data in ds.attrs.items():
+#     print(f"{attr}: {data}\n")
 
-ds = xr.open_dataset("data/met/AU-DaP_2009-2012_OzFlux_Met.nc")
-for attr, data in ds.attrs.items():
-    print(f"{attr}: {data}\n")
-
-# print(40 * "=")
+####################################
 
 # ds = xr.open_dataset("data/flux/AU-Tum_2002-2017_OzFlux_Flux.nc")
 # print("FLUX\n")

@@ -1,10 +1,4 @@
-"""Collect everything the paper needs into hydrology/results/.
-
-Run from the repo root, or from anywhere:
-    python hydrology/collect_results.py
-
-Uses the functions in hydrology/et_signatures.py, so the signatures are exactly
-the same as when you run that script. AU-Ync is skipped.
+"""Generates hydrology/results/ using the functions in hydrology/et_signatures.py.
 
 Writes to hydrology/results/:
     et_sites.csv         one row per site x source: the Table 2 signatures, the
@@ -14,16 +8,11 @@ Writes to hydrology/results/:
                          per site and source (for the WS time series)
     et_monthly.csv       the same for every complete month (monthly WS time series)
     et_eb.csv            tower energy gap and energy-balance-corrected tower ET
-    drydown_curves.csv   ET against days since rain, per site and source
-    drydown_sites.csv    dry-down summary per site and source (half-life etc.)
-    event_composites.csv ET around big rain events that end a dry spell
-    event_sites.csv      event summary per site and source (peak response etc.)
 
 How the script is laid out:
     1. settings
-    2. helpers for dry-downs and rain events
-    3. one function per output table (each returns rows for one site)
-    4. main(): loops over sites and sources, collects the rows, writes the CSVs
+    2. one function per output table (each returns rows for one site)
+    3. main(): loops over sites and sources, collects the rows, writes the CSVs
 
 All daily ET, rain and PET come from et_signatures.py (ets.analysis_days,
 ets.daily_rain, ets.daily_pet), which keep measured tower data only and put
@@ -51,101 +40,9 @@ HARMONISED = REPO / "data" / "harmonised"
 RESULTS = HERE / "results"
 SKIP_SITES = ["AU-Ync"]          # its tower files are a copy of AU-ASM
 
-# Dry-down settings: a "rain day" has at least this much rain (mm/day)
-DRYDOWN_RAIN_MM = 1.0
-DRYDOWN_MAX_DAYS = 150           # follow dry spells up to this many days
-DRYDOWN_MIN_SAMPLES = 8          # need this many days at a given day-since-rain
-
-# Event composite settings: a big rain day that ends a dry spell
-EVENT_RAIN_MM = 10.0             # rain on the event day (mm)
-EVENT_DRY_BEFORE_DAYS = 7        # previous days must each have < 1 mm
-EVENT_BEFORE, EVENT_AFTER = 5, 20  # days shown before and after the event
-
 
 # ============================================================================
-# 2. Helpers for dry-downs and rain events
-# ============================================================================
-def days_since_rain(rain_daily):
-    """For each day, how many days since the last day with >= DRYDOWN_RAIN_MM.
-    0 on a rain day; NaN before the first rain day in the record. A day with
-    no measured rain is unknown (it may have rained), so the count is NaN from
-    there until the next rain day."""
-    out = np.full(len(rain_daily), np.nan)
-    count = np.nan
-    for i, r in enumerate(rain_daily.values):
-        if not np.isfinite(r):
-            count = np.nan                  # rain unknown: restart the count at the next rain
-        elif r >= DRYDOWN_RAIN_MM:
-            count = 0
-        elif np.isfinite(count):
-            count += 1
-        out[i] = count
-    return pd.Series(out, index=rain_daily.index)
-
-
-def drydown(et_daily, since):
-    """Median ET at each day since rain (1..DRYDOWN_MAX_DAYS), normalised by the
-    median over days 1-3. Returns the curve and summary numbers."""
-    df = pd.DataFrame({"et": et_daily, "d": since}).dropna()
-    df = df[(df.d >= 1) & (df.d <= DRYDOWN_MAX_DAYS)]
-    counts = df.groupby("d").et.count()
-    med = df.groupby("d").et.median()[counts >= DRYDOWN_MIN_SAMPLES]
-    if len(med) < 10 or med.loc[med.index <= 3].empty:
-        return None, {}
-    start = med.loc[med.index <= 3].mean()
-    norm = med / start
-    smooth = norm.rolling(7, center=True, min_periods=3).median()
-    below = smooth[smooth <= 0.5]
-    half_life = float(below.index[0]) if len(below) else np.nan
-    # e-folding time from a straight-line fit of log(ET) over days 1-60
-    fit = med[(med.index <= 60) & (med > 0)]
-    tau = np.nan
-    if len(fit) >= 15:
-        slope = np.polyfit(fit.index.values, np.log(fit.values), 1)[0]
-        tau = -1 / slope if slope < 0 else np.inf
-    summary = {"et_days1to3": start, "half_life_days": half_life, "efold_days": tau,
-               "max_day_available": int(med.index.max()),
-               "ratio_day30": float(smooth.get(30, np.nan)),
-               "ratio_day60": float(smooth.get(60, np.nan))}
-    curve = pd.DataFrame({"day": norm.index, "et_median": med.values, "et_norm": norm.values,
-                          "et_norm_smooth": smooth.values})
-    return curve, summary
-
-
-def find_events(rain_daily):
-    """Days with >= EVENT_RAIN_MM rain after EVENT_DRY_BEFORE_DAYS days with < 1 mm.
-    Returns positions (0, 1, 2, ...) in rain_daily, not dates. A missing rain
-    day fails both tests (NaN >= 10 and NaN < 1 are False), so an event is
-    only kept if the event day and all 7 days before were measured."""
-    r = rain_daily.values
-    events = []
-    for i in range(EVENT_DRY_BEFORE_DAYS, len(r) - EVENT_AFTER):
-        if r[i] >= EVENT_RAIN_MM and np.all(r[i - EVENT_DRY_BEFORE_DAYS:i] < 1.0):
-            events.append(i)
-    return events
-
-
-def event_composite(et_daily, events):
-    """Mean change in daily ET relative to the 5 days before each event."""
-    lags = np.arange(-EVENT_BEFORE, EVENT_AFTER + 1)
-    rows = []
-    v = et_daily.values
-    for i in events:
-        if i - EVENT_BEFORE < 0:
-            continue
-        window = v[i - EVENT_BEFORE: i + EVENT_AFTER + 1]
-        base = np.nanmean(v[i - EVENT_BEFORE: i])
-        if not np.isfinite(base):
-            continue
-        rows.append(window - base)
-    if not rows:
-        return None
-    return pd.DataFrame({"lag": lags, "d_et": np.nanmean(np.array(rows), axis=0),
-                         "n_events": len(rows)})
-
-
-# ============================================================================
-# 3. One function per output table
+# 2. One function per output table
 # ============================================================================
 def site_weather(ds):
     """ET, rain and PET for one site (measured data only).
@@ -166,8 +63,6 @@ def site_weather(ds):
     w["pet_clim"] = w["pet_monthly"].groupby(w["pet_monthly"].index.month).mean()
     w["dry_months"] = w["rain_clim"].nsmallest(3).index    # 3 calendar months with least rain
     w["wet_months"] = w["rain_clim"].nlargest(3).index     # 3 with most
-    w["since"] = days_since_rain(w["rain_daily"])
-    w["events"] = find_events(w["rain_daily"])
     return w
 
 
@@ -185,7 +80,6 @@ def site_metadata(ds, site, w):
         "frac_qle_measured": float(ds.measured_Qle.mean()),
         "dry_months": " ".join(str(m) for m in sorted(w["dry_months"])),
         "wet_months": " ".join(str(m) for m in sorted(w["wet_months"])),
-        "n_dry_events": len(w["events"]),
     }
 
 
@@ -238,17 +132,6 @@ def climatology_rows(site, source, aet_daily, w):
             for m in range(1, 13)]
 
 
-def event_summary(site, source, comp):
-    """event_sites.csv: peak ET response after rain events and how long it lasts."""
-    after = comp[comp.lag.between(0, 5)]
-    peak = after.d_et.max()
-    peak_lag = int(after.loc[after.d_et.idxmax(), "lag"])
-    late = comp[comp.lag.between(10, 20)].d_et.mean()
-    return {"site": site, "source": source, "n_events": int(comp.n_events.iloc[0]),
-            "peak_d_et": peak, "peak_lag": peak_lag, "late_d_et": late,
-            "persistence": late / peak if peak > 0 else np.nan}
-
-
 def energy_balance_row(ds, site, days):
     """et_eb.csv: tower energy gap and energy-balance-corrected tower ET.
     days: True on the days used for ET (from analysis_days), so the corrected
@@ -268,12 +151,11 @@ def energy_balance_row(ds, site, days):
 
 
 # ============================================================================
-# 4. Main: loop over sites and sources, then write the tables
+# 3. Main: loop over sites and sources, then write the tables
 # ============================================================================
 def main():
     RESULTS.mkdir(parents=True, exist_ok=True)
     site_rows, clim_rows, eb_rows, annual_rows, monthly_rows = [], [], [], [], []
-    dd_curves, dd_rows, ev_curves, ev_rows = [], [], [], []
 
     for path in sorted(HARMONISED.glob("*.nc")):
         site = path.stem
@@ -292,16 +174,6 @@ def main():
             monthly_rows += water_stress_rows(site, source, aet_daily, w, "MS")
             clim_rows += climatology_rows(site, source, aet_daily, w)
 
-            curve, summary = drydown(aet_daily, w["since"])
-            if curve is not None:
-                dd_curves.append(curve.assign(site=site, source=source))
-                dd_rows.append({"site": site, "source": source, **summary})
-
-            comp = event_composite(aet_daily, w["events"])
-            if comp is not None:
-                ev_curves.append(comp.assign(site=site, source=source))
-                ev_rows.append(event_summary(site, source, comp))
-
         eb_rows.append(energy_balance_row(ds, site, w["aet"]["obs"].notna()))
 
     pd.DataFrame(site_rows).to_csv(RESULTS / "et_sites.csv", index=False)
@@ -309,10 +181,6 @@ def main():
     pd.DataFrame(eb_rows).to_csv(RESULTS / "et_eb.csv", index=False)
     pd.DataFrame(annual_rows).to_csv(RESULTS / "et_annual.csv", index=False)
     pd.DataFrame(monthly_rows).to_csv(RESULTS / "et_monthly.csv", index=False)
-    pd.concat(dd_curves).to_csv(RESULTS / "drydown_curves.csv", index=False)
-    pd.DataFrame(dd_rows).to_csv(RESULTS / "drydown_sites.csv", index=False)
-    pd.concat(ev_curves).to_csv(RESULTS / "event_composites.csv", index=False)
-    pd.DataFrame(ev_rows).to_csv(RESULTS / "event_sites.csv", index=False)
     print(f"wrote results to {RESULTS}")
 
 
