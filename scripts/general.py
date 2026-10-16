@@ -5,7 +5,7 @@ import pandas as pd
 import xarray as xr
 
 
-print(xr.open_dataset("data/harmonised/AU-ASM.nc")["Precip"].attrs)
+# print(xr.open_dataset("data/harmonised/AU-ASM.nc")["Precip"].attrs)
 
 
 # datasets = sorted(Path("data/harmonised/").glob("*.nc"))
@@ -14,44 +14,21 @@ print(xr.open_dataset("data/harmonised/AU-ASM.nc")["Precip"].attrs)
 #     print(xr.open_dataset(ds).data_vars)
 #     print(40*"=")
 
-####################################
-# ds = xr.open_dataset("data/met/AU-DaP_2009-2012_OzFlux_Met.nc")
+###################################
+for site in sorted(Path("data/harmonised/").glob("*.nc")):
+    print(f"{site.stem}: {xr.open_dataset(site)["time"].dt.year.values[0]} - {xr.open_dataset(site)["time"].dt.year.values[-1]}")
+
+
 # for attr, data in ds.attrs.items():
 #     print(f"{attr}: {data}\n")
 
-####################################
+###################################
 
 # ds = xr.open_dataset("data/flux/AU-Tum_2002-2017_OzFlux_Flux.nc")
 # print("FLUX\n")
 # print(ds.data_vars)
 
 
-# # earlier check that AU-ASM and AU-Ync hold the same data
-
-# ds1 = xr.open_dataset("data/met/AU-ASM_2011-2017_OzFlux_Met.nc")
-# ds2 = xr.open_dataset("data/met/AU-Ync_2011-2017_OzFlux_Met.nc")
-# ar1 = ds1.Qair.values
-# ar2 = ds2.Qair.values
-
-# for i in range(len(ar1)):
-#     if ar1[i] != ar2[i]:
-#         print("NOT EQUAL\n")
-
-# print("DONE Met")
-
-# ds3 = xr.open_dataset("data/flux/AU-ASM_2011-2017_OzFlux_Flux.nc")
-# ds4 = xr.open_dataset("data/flux/AU-Ync_2011-2017_OzFlux_Flux.nc")
-# ar3 = ds3.Qle.values
-# ar4 = ds4.Qle.values
-
-# for i in range(len(ar1)):
-#     if ar3[i] != ar4[i]:
-#         print("NOT EQUAL\n")
-
-# print("DONE Flux")
-
-###############################################################
-###############################################################
 ###############################################################
 
 # HARMONISED = Path("data/harmonised")

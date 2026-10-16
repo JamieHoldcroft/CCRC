@@ -143,7 +143,8 @@ def energy_balance_row(ds, site, days):
     # Corrected ET: Qle_cor to mm/day, the same way as ets.daily_et
     step = ds.attrs["timestep_s"]
     lam = ets.latent_heat(ds.Tair_C.to_series())
-    et_cor = ets.measured_daily(ds.Qle_cor.to_series() / lam * step, ets.is_measured(ds, "Qle"))
+    et_cor = ets.measured_daily(ds.Qle_cor.to_series() / lam * step, ets.is_measured(ds, "Qle"),
+                                ds.SWdown.to_series() >= ets.DAY_SWDOWN)
     et_cor = et_cor.where(days & (et_cor >= 0))
     return {"site": site,
             "eb_gap_pct": 100 * (np.nanmean(corrected) / np.nanmean(raw) - 1),
@@ -179,8 +180,8 @@ def main():
     pd.DataFrame(site_rows).to_csv(RESULTS / "et_sites.csv", index=False)
     pd.DataFrame(clim_rows).to_csv(RESULTS / "et_monthly_clim.csv", index=False)
     pd.DataFrame(eb_rows).to_csv(RESULTS / "et_eb.csv", index=False)
-    pd.DataFrame(annual_rows).to_csv(RESULTS / "et_annual.csv", index=False)
-    pd.DataFrame(monthly_rows).to_csv(RESULTS / "et_monthly.csv", index=False)
+    pd.DataFrame(annual_rows, columns=["site", "source", "year", "ET", "PET", "WS"]).to_csv(RESULTS / "et_annual.csv", index=False)
+    pd.DataFrame(monthly_rows, columns=["site", "source", "month", "ET", "PET", "WS"]).to_csv(RESULTS / "et_monthly.csv", index=False)
     print(f"wrote results to {RESULTS}")
 
 

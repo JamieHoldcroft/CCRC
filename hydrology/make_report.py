@@ -129,7 +129,9 @@ def fig1_sites_climate():
     fig, axes = plt.subplots(1, 2, figsize=A4L)
     ax = axes[0]
     for s in o.index:
-        ax.scatter(o.loc[s, "lon"], o.loc[s, "lat"], s=40 + 25 * o.loc[s, "aridity"],
+        aridity = o.loc[s, "aridity"]
+        size = 40 if pd.isna(aridity) else 40 + 25 * aridity     # no aridity (no complete year of rain): smallest dot
+        ax.scatter(o.loc[s, "lon"], o.loc[s, "lat"], s=size,
                    color=GCOL[GROUP[s]], edgecolor="k", lw=0.5, zorder=3)
         ax.annotate(s.replace("AU-", ""), (o.loc[s, "lon"], o.loc[s, "lat"]), fontsize=7,
                     xytext=(4, 3), textcoords="offset points")
@@ -171,7 +173,7 @@ def fig2_model_vs_tower():
         ax.plot([lo - pad, hi + pad], [lo - pad, hi + pad], "k--", lw=0.7)
         for mod, m in [("CABLE", c), ("JULES", j)]:
             ok = o.loc[sel, k].notna() & m.loc[sel, k].notna()      # sites with both values
-            r = stats.pearsonr(o.loc[sel, k][ok], m.loc[sel, k][ok])[0]
+            r = stats.pearsonr(o.loc[sel, k][ok], m.loc[sel, k][ok])[0] if ok.sum() >= 2 else np.nan
             ax.scatter(o.loc[sel, k], m.loc[sel, k], color=MCOL[mod], s=22, alpha=0.8,
                        label=f"{mod} (r = {r:.2f})")
         for s in sel:
@@ -198,9 +200,12 @@ def fig4_errors_vs_aridity():
     for ax, (title, fn, ylab) in zip(axes.ravel(), panels):
         for mod, m in [("CABLE", c), ("JULES", j)]:
             e = fn(m)
-            rho = stats.spearmanr(o.aridity, e, nan_policy="omit")
-            ax.scatter(o.aridity, e, color=MCOL[mod], s=22, alpha=0.8,
-                       label=f"{mod} (rho = {rho.statistic:.2f}, p = {rho.pvalue:.2f})")
+            if (o.aridity.notna() & e.notna()).sum() >= 3:
+                rho = stats.spearmanr(o.aridity, e, nan_policy="omit")
+                label = f"{mod} (rho = {rho.statistic:.2f}, p = {rho.pvalue:.2f})"
+            else:
+                label = f"{mod} (too few sites for rho)"
+            ax.scatter(o.aridity, e, color=MCOL[mod], s=22, alpha=0.8, label=label)
         for s in o.index:
             ax.annotate(s.replace("AU-", ""), (o.loc[s, "aridity"], fn(c)[s]), fontsize=6,
                         color="0.4", xytext=(2, 2), textcoords="offset points")
@@ -434,6 +439,10 @@ def map_figures():
             err_j = j.loc[sites, col] - o.loc[sites, col]
             err_cj = err_c - err_j          # the same as CABLE - JULES; obs cancels out
 
+        if (err_c.notna() & err_j.notna()).sum() == 0:
+            print(f"skipped map_{col}.png: no site has a value for it")
+            continue
+
         # Step 2: one colour scale for the two model maps, so the same colour means
         # the same error in both. The scale is symmetric so white is exactly zero.
         vmax = np.nanmax(np.abs(np.concatenate([err_c.values, err_j.values])))
@@ -497,6 +506,8 @@ def ws_monthly_all():
         for source in ["obs", "CABLE", "JULES"]:
             one = monthly[(monthly.site == site) & (monthly.source == source)]
             ws = one.set_index("month").WS
+            if ws.empty:
+                continue                     # no complete month for this source
             # Fill in missing (incomplete) months with NaN so the line breaks there
             # instead of joining across the gap.
             all_months = pd.date_range(ws.index.min(), ws.index.max(), freq="MS")
@@ -551,6 +562,8 @@ def ws_per_site():
         for source in ["obs", "CABLE", "JULES"]:
             one = monthly[(monthly.site == site) & (monthly.source == source)]
             ws = one.set_index("month").WS
+            if ws.empty:
+                continue                     # no complete month for this source
             all_months = pd.date_range(ws.index.min(), ws.index.max(), freq="MS")
             ws = ws.reindex(all_months)
             ax.plot(ws.index, ws.values, color=MCOL[source], linewidth=0.9, label=source)
