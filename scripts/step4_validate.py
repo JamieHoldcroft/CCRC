@@ -1,8 +1,8 @@
 """Check every harmonised site file for processing errors, and score the models.
 
 Run from the repo root:
-    python scripts/04_validate.py              # all files in data/harmonised
-    python scripts/04_validate.py AU-Cum       # named sites
+    python scripts/step4_validate.py              # all files in data/harmonised
+    python scripts/step4_validate.py AU-Cum       # named sites
 
 Writes to outputs/validation/:
     checks.csv       one row per site x source x variable x check (pass/warn/fail)
@@ -17,8 +17,7 @@ from pathlib import Path
 
 import pandas as pd
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # find ccrc/ from scripts/
-from ccrc.validate import validate
+from validate import validate
 
 DATA = Path("data/harmonised")
 OUT = Path("outputs/validation")

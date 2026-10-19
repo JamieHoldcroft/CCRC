@@ -1,4 +1,4 @@
-# Thresholds for scripts/08_benchmark_loss.py. Every value here is written into
+# Thresholds for scripts/step6_benchmark_loss.py. Every value here is written into
 # the output CSV, so each detected period records how it was found.
 
 benchmark_loss:

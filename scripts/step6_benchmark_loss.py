@@ -5,8 +5,8 @@ If a land model is worse than all of them, the information was in the weather
 but the model did not use it -- a sign of a missing or wrong process.
 
 Run from the repo root:
-    python scripts/08_benchmark_loss.py                 # all sites
-    python scripts/08_benchmark_loss.py AU-How AU-Tum   # named sites
+    python scripts/step6_benchmark_loss.py                 # all sites
+    python scripts/step6_benchmark_loss.py AU-How AU-Tum   # named sites
 
 Settings: config/detection.yaml (benchmark_loss section).
 Output:   outputs/detection/benchmark_loss_periods.csv, one row per period.
@@ -38,7 +38,7 @@ import yaml
 
 HARMONISED = Path("data/harmonised")
 OUT = Path("outputs/detection")
-SKIP_SITES = ["AU-Ync"]  # copy of AU-ASM (OPEN_QUESTIONS.md, item 16)
+SKIP_SITES = ["AU-Ync"]  # copy of AU-ASM (its tower files are a copy of AU-ASM)
 
 with open("config/detection.yaml") as fh:
     CFG = yaml.safe_load(fh)["benchmark_loss"]

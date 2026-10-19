@@ -87,7 +87,7 @@ def measured_daily(per_step, measured, daytime, how="sum"):
 
 # ============================================================================
 # Step 1: daily ET (mm/day) for one source
-# This is the ONLY place ET is made. collect_results.py calls it too, so any
+# This is the ONLY place ET is made. step1_collect_results.py calls it too, so any
 # change here (e.g which tower data are used) reaches every output
 # ============================================================================
 

@@ -1,16 +1,15 @@
 """Draw every detected failure period, with 10 days either side for context.
 
-Run from the repo root (after scripts/08_benchmark_loss.py):
-    python scripts/09_plot_periods.py
+Run from the repo root (after scripts/step6_benchmark_loss.py):
+    python scripts/step7_plot_periods.py
 
 Reads outputs/detection/benchmark_loss_periods.csv and writes one PNG per period
 to outputs/detection/plots/, named <site>_<variable>_<model>_<start>.png.
-The figures use the same drawing code as scripts/07_cable_jules.py (obs black,
+The figures use the same drawing code as scripts/view_cable_jules.py (obs black,
 CABLE blue, JULES red, benchmarks dashed grey), half-hourly, with the detected
 period shaded yellow.
 """
 
-import importlib.util
 from pathlib import Path
 
 import matplotlib
@@ -23,10 +22,8 @@ PERIODS = Path("outputs/detection/benchmark_loss_periods.csv")
 OUT = Path("outputs/detection/plots")
 CONTEXT_DAYS = 10
 
-# Reuse read_site and plot_site from scripts/07_cable_jules.py
-spec = importlib.util.spec_from_file_location("viewer", "scripts/07_cable_jules.py")
-viewer = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(viewer)
+# Reuse read_site and plot_site from scripts/view_cable_jules.py
+import view_cable_jules as viewer
 
 periods = pd.read_csv(PERIODS, parse_dates=["start", "end"])
 OUT.mkdir(parents=True, exist_ok=True)

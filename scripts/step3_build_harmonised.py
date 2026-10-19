@@ -1,8 +1,8 @@
 """Build data/harmonised/<SITE>.nc for one or more sites.
 
 Run from the repo root:
-    python scripts/02_build_site.py AU-Cum AU-How     # named sites
-    python scripts/02_build_site.py --all             # every site in data/flux
+    python scripts/step3_build_harmonised.py AU-Cum AU-How     # named sites
+    python scripts/step3_build_harmonised.py --all             # every site in data/flux
 
 For each site also writes, to outputs/build/:
     <SITE>_corrections.csv   every change applied to each model (time shift,
@@ -15,8 +15,7 @@ from pathlib import Path
 
 import pandas as pd
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # find ccrc/ from scripts/
-from ccrc.harmonise import build_site, load_config, save
+from harmonise import build_site, load_config, save
 
 OUT = Path("data/harmonised")
 LOGS = Path("outputs/build")

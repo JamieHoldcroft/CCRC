@@ -3,7 +3,7 @@
 Paper: Abramowitz et al. (2024), Biogeosciences 21, 5517-5538.
 
 Run from the repo root:
-    python scripts/06_paper_figures.py
+    python scripts/step5_paper_figures.py
 
 Writes to outputs/paper_figures/:
     fig1_qle_vs_qh.png        Fig. 1  site-mean Qle vs Qh per model
@@ -15,7 +15,7 @@ Writes to outputs/paper_figures/:
     fig8_lstm_gain.png        Fig. 8  how much better LSTM is than the land models, per site,
                                       on axes of ET/rain vs dryness (PET/rain)
 
-Same conventions as scripts/general.py: AU-Ync skipped (copy of AU-ASM),
+Conventions: AU-Ync skipped (copy of AU-ASM),
 averages over time steps the tower measured, NME instead of the paper's
 dNMV/iNMV.
 """

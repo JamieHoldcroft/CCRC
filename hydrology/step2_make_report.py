@@ -1,4 +1,4 @@
-"""Generates the ET signature figures after having run collect_results.py
+"""Generates the ET signature figures after having run step1_collect_results.py
 
 Just reads the tables in hydrology/results/ and saves PNGs to hydrology/figures/
 
@@ -31,13 +31,13 @@ from scipy import stats
 # 1. Settings
 # ============================================================================
 HERE = Path(__file__).resolve().parent
-OUT = HERE / "results"          # tables from collect_results.py
+OUT = HERE / "results"          # tables from step1_collect_results.py
 FIGS = HERE / "figures"         # every figure is saved here
 FIGS.mkdir(exist_ok=True)
 
 # Map positions. True = take lat/lon for the maps from et_sites_lat_changed.csv,
 # where 4 sites are nudged so their labels don't overlap. False = true positions.
-# Either way the signatures come from et_sites.csv, which collect_results.py
+# Either way the signatures come from et_sites.csv, which step1_collect_results.py
 # rewrites every run.
 USE_NUDGED_POSITIONS = True
 
@@ -69,7 +69,7 @@ A4L = (11.69, 8.27)
 
 
 # ============================================================================
-# 2. Load the tables (all written by collect_results.py)
+# 2. Load the tables (all written by step1_collect_results.py)
 # ============================================================================
 d = pd.read_csv(OUT / "et_sites.csv")                                 # one row per site x source
 if USE_NUDGED_POSITIONS:
@@ -470,7 +470,7 @@ def map_figures():
 
 # Water stress (WS) year by year. WS = 1 - ET/PET for each complete year,
 # the same formula as signature 6 but for one year at a time (from
-# collect_results.py, et_annual.csv). Sites go wettest to driest.
+# step1_collect_results.py, et_annual.csv). Sites go wettest to driest.
 def ws_annual_all():
     fig, axes = plt.subplots(6, 4, figsize=(11.69, 14), sharey=True)
     for ax, site in zip(axes.flat, order):
@@ -496,7 +496,7 @@ def ws_annual_all():
 
 
 # Water stress month by month: WS = 1 - ET/PET for each complete month
-# (et_monthly.csv from collect_results.py). 12x more points than the yearly
+# (et_monthly.csv from step1_collect_results.py). 12x more points than the yearly
 # plot, so you can see the seasons and individual droughts. In winter PET is
 # small, so WS swings far below zero when ET is larger than PET; the y axis is
 # cut at -1 and those months run off the bottom of the panel.

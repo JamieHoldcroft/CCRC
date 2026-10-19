@@ -1,8 +1,8 @@
 """Inventory every model output file before building the harmonised per-site files.
 
 Run from the repo root:
-    python scripts/01_inventory.py                # full run (reads every file, slow)
-    python scripts/01_inventory.py --report-only  # re-print the summary from files.csv
+    python scripts/step2_inventory.py                # full run (reads every file, slow)
+    python scripts/step2_inventory.py --report-only  # re-print the summary from files.csv
 
 Reads only metadata, the time axis and the key flux variables of each file in
 data/models/<MODEL>/<SITE>.nc. Nothing is modified. Writes three tables to

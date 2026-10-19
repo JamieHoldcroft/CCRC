@@ -6,15 +6,6 @@
 outputs/*
 !outputs/.gitkeep
 
-ets.md
-
-# Ignore personal project overview file
-PROJECT_BRIEFING.md
-
-# Ignore AU dataset comparison
-ASM_vs_YNC.py
-make_rep.md
-
 # Python
 __pycache__/
 *.py[cod]

@@ -2,10 +2,10 @@
 nothing is saved to disk.
 
 Run from the repo root:
-    python scripts/07_cable_jules.py                    # every site, whole record (weekly means)
-    python scripts/07_cable_jules.py --site AU-How      # one site, whole record
-    python scripts/07_cable_jules.py --ML               # also draw the ML benchmarks
-    python scripts/07_cable_jules.py --zoom AU-Tum 2013-12-01 2014-01-02
+    python scripts/view_cable_jules.py                    # every site, whole record (weekly means)
+    python scripts/view_cable_jules.py --site AU-How      # one site, whole record
+    python scripts/view_cable_jules.py --ML               # also draw the ML benchmarks
+    python scripts/view_cable_jules.py --zoom AU-Tum 2013-12-01 2014-01-02
                                                         # one window, half-hourly
 Options you can add to any of the above:
     --vars Qle Qh       which fluxes to show (default: Qle Qh Rnet NEE GPP)
@@ -42,7 +42,7 @@ import pandas as pd
 import xarray as xr
 
 HARMONISED = Path("data/harmonised")
-SKIP_SITES = ["AU-Ync"]  # copy of AU-ASM (OPEN_QUESTIONS.md, item 16)
+SKIP_SITES = ["AU-Ync"]  # its tower files are a copy of AU-ASM
 
 UNITS = {"Qle": "W/m2", "Qh": "W/m2", "Rnet": "W/m2", "Qg": "W/m2",
          "NEE": "umol/m2/s", "GPP": "umol/m2/s"}

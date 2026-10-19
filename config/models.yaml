@@ -1,5 +1,5 @@
 # Every model output used to build data/harmonised/<SITE>.nc, and how to correct it.
-# Read by ccrc/harmonise.py. Raw files in data/models/ are never modified.
+# Read by scripts/harmonise.py. Raw files in data/models/ are never modified.
 #
 # Fields
 #   role     focus       CABLE / JULES, the head-to-head pair
@@ -24,7 +24,7 @@
 #   exclude_sites  sites where this model's file is unusable
 #   drop_vars      fluxes from this model that are unusable everywhere (set to NaN)
 #
-# Units are not set here: ccrc/harmonise.py reads each variable's units attribute
+# Units are not set here: scripts/harmonise.py reads each variable's units attribute
 # and converts it (stopping with an error on any unit it does not recognise).
 # Carbon fluxes in kg or g per m2 per s are kg/g of CARBON (confirmed by Jamie).
 

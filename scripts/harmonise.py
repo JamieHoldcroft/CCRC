@@ -28,7 +28,7 @@ import pandas as pd
 import xarray as xr
 import yaml
 
-from ccrc.loaders import FLUX_VARS, KGC_TO_UMOLCO2, load_site
+from loaders import FLUX_VARS, KGC_TO_UMOLCO2, load_site
 
 ENERGY_VARS = ["Qle", "Qh", "Rnet", "Qg"]
 CARBON_VARS = ["NEE", "GPP"]
@@ -79,7 +79,7 @@ def unit_factor(var, units):
     table = ENERGY_UNITS if var in ENERGY_VARS else CARBON_UNITS
     key = normalise_units(units)
     if key not in table:
-        raise ValueError(f"{var}: unrecognised units '{units}'. Add them to ccrc/harmonise.py")
+        raise ValueError(f"{var}: unrecognised units '{units}'. Add them to scripts/harmonise.py")
     return table[key]
 
 
@@ -320,7 +320,7 @@ def build_site(site, models_cfg, data_dir=Path("data")):
         "obs_files": f"{met.name}, {flux.name}",
         "model_files": ", ".join(f"models/{n}/{site}.nc" for n in names[1:]),
         "built": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC"),
-        "built_by": "scripts/02_build_site.py",
+        "built_by": "scripts/step3_build_harmonised.py",
         "git_commit": git_commit(),
         "corrections": "\n".join(f"{s} {v}: {c}" for s, v, c in log),
     })
