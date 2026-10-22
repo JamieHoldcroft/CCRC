@@ -1,6 +1,8 @@
 """Generates the ET signature figures after having run step1_collect_results.py
 
 Just reads the tables in hydrology/results/ and saves PNGs to hydrology/figures/
+(results_fluxnet/ and figures_fluxnet/ when DATASET = "fluxnet" in et_signatures.py).
+Works with CABLE only: any model missing from the tables is left out of every figure.
 
 How the script is laid out:
     1. settings (folders, colours, site groups)
@@ -13,6 +15,7 @@ How the script is laid out:
        skip a figure.
 """
 
+import sys
 from pathlib import Path
 
 import matplotlib
@@ -31,26 +34,73 @@ from scipy import stats
 # 1. Settings
 # ============================================================================
 HERE = Path(__file__).resolve().parent
-OUT = HERE / "results"          # tables from step1_collect_results.py
-FIGS = HERE / "figures"         # every figure is saved here
+sys.path.insert(0, str(HERE))
+import et_signatures as ets     # only for the DATASET switch (folder names)
+
+OUT = HERE / f"results{ets.SUFFIX}"     # tables from step1_collect_results.py
+FIGS = HERE / f"figures{ets.SUFFIX}"    # every figure is saved here
 FIGS.mkdir(exist_ok=True)
 
 # Map positions. True = take lat/lon for the maps from et_sites_lat_changed.csv,
 # where 4 sites are nudged so their labels don't overlap. False = true positions.
 # Either way the signatures come from et_sites.csv, which step1_collect_results.py
-# rewrites every run.
-USE_NUDGED_POSITIONS = True
+# rewrites every run. The nudged file only exists for the 22 PLUMBER2 sites.
+USE_NUDGED_POSITIONS = ets.DATASET == "plumber2"
 
+# Site groups. Each site's Koppen-Geiger climate (Rubel et al. 2017, 1986-2010,
+# 100 arc-second map, looked up at the tower's lat/lon) decides its group:
+#   Af/Am                -> Tropical rainforest (all three are rainforest towers)
+#   Aw, and BSh north of the Tropic of Capricorn (23.4 S)  -> Tropical savanna
+#   BWh, BSk, and BSh south of the Tropic                 -> Arid & semi-arid
+#   Cfa, Cfb, Csa, Csb   -> Temperate & subtropical
+# One exception, by vegetation: AU-Rob is tropical rainforest on the Atherton
+# Tableland, which the map calls Cfa because of its 700 m altitude.
 GROUP = {
-    "AU-Cow": "Tropical rainforest", "AU-Ctr": "Tropical rainforest", "AU-Rob": "Tropical rainforest",
-    "AU-How": "Tropical savanna", "AU-Lit": "Tropical savanna", "AU-DaS": "Tropical savanna",
-    "AU-Dry": "Tropical savanna", "AU-DaP": "Tropical savanna", "AU-Stp": "Tropical savanna",
-    "AU-ASM": "Arid & semi-arid", "AU-TTE": "Arid & semi-arid", "AU-GWW": "Arid & semi-arid",
-    "AU-Cpr": "Arid & semi-arid", "AU-Emr": "Arid & semi-arid",
-    "AU-Tum": "Temperate & subtropical", "AU-Wrr": "Temperate & subtropical",
-    "AU-Whr": "Temperate & subtropical", "AU-Rig": "Temperate & subtropical",
-    "AU-Otw": "Temperate & subtropical", "AU-Cum": "Temperate & subtropical",
-    "AU-Sam": "Temperate & subtropical", "AU-Gin": "Temperate & subtropical",
+    # Tropical rainforest
+    "AU-Cow": "Tropical rainforest",       # Am  Cow Bay QLD, rainforest
+    "AU-Ctr": "Tropical rainforest",       # Am  Cape Tribulation QLD, rainforest
+    "AU-Rob": "Tropical rainforest",       # Cfa Robson Creek QLD, upland rainforest (exception above)
+    # Tropical savanna
+    "AU-How": "Tropical savanna",          # Aw  Howard Springs NT, eucalypt savanna
+    "AU-Lit": "Tropical savanna",          # Aw  Litchfield NT, eucalypt savanna
+    "AU-DaS": "Tropical savanna",          # Aw  Daly River Savanna NT
+    "AU-DaP": "Tropical savanna",          # Aw  Daly River Pasture NT, cleared savanna
+    "AU-Dry": "Tropical savanna",          # Aw  Dry River NT, savanna
+    "AU-Ade": "Tropical savanna",          # Aw  Adelaide River NT, eucalypt savanna woodland
+    "AU-RDF": "Tropical savanna",          # Aw  Red Dirt Melon Farm NT, cleared savanna
+    "AU-Fog": "Tropical savanna",          # Aw  Fogg Dam NT, seasonally flooded wetland
+    "AU-Stp": "Tropical savanna",          # BSh Sturt Plains NT (17 S), tropical grassland
+    "AU-Fle": "Tropical savanna",          # BSh Fletcherview QLD (20 S), semi-arid tropical savanna
+    # Arid & semi-arid
+    "AU-ASM": "Arid & semi-arid",          # BWh Alice Springs Mulga NT
+    "AU-TTE": "Arid & semi-arid",          # BWh Ti Tree East NT
+    "AU-GWW": "Arid & semi-arid",          # BSh Great Western Woodlands WA (30 S)
+    "AU-Emr": "Arid & semi-arid",          # BSh Emerald QLD (23.9 S), grassland
+    "AU-Lon": "Arid & semi-arid",          # BSh Longreach QLD (23.5 S), Mitchell grass
+    "AU-Cpr": "Arid & semi-arid",          # BSk Calperum SA, mallee
+    "AU-Ync": "Arid & semi-arid",          # BSk Yanco NSW, grassland
+    # Temperate & subtropical
+    "AU-Cum": "Temperate & subtropical",   # Cfa Cumberland Plain NSW, dry sclerophyll forest
+    "AU-Sam": "Temperate & subtropical",   # Cfa Samford QLD, pasture
+    "AU-Rig": "Temperate & subtropical",   # Cfa Riggs Creek VIC, pasture
+    "AU-Whr": "Temperate & subtropical",   # Cfa Whroo VIC, box-ironbark woodland
+    "AU-MvA": "Temperate & subtropical",   # Cfa Myall Vale NSW, dryland pasture
+    "AU-Wel": "Temperate & subtropical",   # Cfa Wellington NSW, pasture/woodland
+    "AU-Ya1": "Temperate & subtropical",   # Cfa Yarramundi NSW, pasture
+    "AU-Ya2": "Temperate & subtropical",   # Cfa Yarramundi NSW, irrigated pasture
+    "AU-Tum": "Temperate & subtropical",   # Cfb Tumbarumba NSW, wet sclerophyll forest
+    "AU-Wrr": "Temperate & subtropical",   # Cfb Warra TAS, wet eucalypt forest
+    "AU-Otw": "Temperate & subtropical",   # Cfb Otway VIC, pasture
+    "AU-Wac": "Temperate & subtropical",   # Cfb Wallaby Creek VIC, mountain ash forest
+    "AU-Wom": "Temperate & subtropical",   # Cfb Wombat VIC, eucalypt forest
+    "AU-APL": "Temperate & subtropical",   # Cfb Alpine Peatland VIC, 1670 m Sphagnum bog
+    "AU-Sno": "Temperate & subtropical",   # Cfb Snow Gum NSW, 1616 m subalpine woodland
+    "AU-Sil": "Temperate & subtropical",   # Cfb Silver Plains TAS, highland grassland
+    "AU-Wgt": "Temperate & subtropical",   # Cfb Wedgetail TAS, highland grassland
+    "AU-Gin": "Temperate & subtropical",   # Csa Gingin WA, banksia woodland
+    "AU-Boy": "Temperate & subtropical",   # Csa Boyagin WA, wandoo woodland
+    "AU-Rgf": "Temperate & subtropical",   # Csa Ridgefield WA, wheat
+    "AU-Col": "Temperate & subtropical",   # Csb Collie WA, jarrah forest
 }
 GCOL = {"Tropical rainforest": "#1b7837", "Tropical savanna": "#d9a400",
         "Arid & semi-arid": "#b2182b", "Temperate & subtropical": "#2166ac"}
@@ -86,13 +136,29 @@ monthly = pd.read_csv(OUT / "et_monthly.csv", parse_dates=["month"])  # WS each 
 # 3. Numbers derived from the tables
 # ============================================================================
 d["aridity"] = d.pet_mm_yr / d.rain_mm_yr      # PET / rain: depends on the PET estimate
+
+
+missing = sorted(set(d.site) - set(GROUP))
+if missing:
+    raise SystemExit(f"Add these sites to GROUP at the top of this script: {', '.join(missing)}")
 d["group"] = d.site.map(GROUP)
 
 # One table per source, indexed by site
 o = d[d.source == "obs"].set_index("site")
 c = d[d.source == "CABLE"].set_index("site")
-j = d[d.source == "JULES"].set_index("site")
+j = d[d.source == "JULES"].set_index("site")    # empty until JULES is in the tables
+# The models in the tables, as (name, table) pairs. Every figure loops over these,
+# so a missing JULES is simply left out.
+MODELS = [(mod, m) for mod, m in [("CABLE", c), ("JULES", j)] if len(m)]
+SOURCES = ["obs"] + [mod for mod, m in MODELS]
+first = MODELS[0][1]                            # used where one model's value places a label
 order = o.sort_values("aridity").index          # wettest to driest
+
+
+def grid(n_panels, width, height_per_row, **kw):
+    """4 columns and enough rows for n_panels (6 rows for the 22 PLUMBER2 sites)."""
+    rows = int(np.ceil(n_panels / 4))
+    return plt.subplots(rows, 4, figsize=(width, height_per_row * rows), squeeze=False, **kw)
 
 
 def save_fig(fig, name):
@@ -107,11 +173,10 @@ def rel_err(m):
 
 
 # Peak-month offsets (Fig 7) and group medians (Fig 5)
-tsp_c = ((c.TSP - o.TSP + 6) % 12) - 6
-tsp_j = ((j.TSP - o.TSP + 6) % 12) - 6
+tsp = {mod: ((m.TSP - o.TSP + 6) % 12) - 6 for mod, m in MODELS}
 
 grp = {}
-for mod, m in [("CABLE", c), ("JULES", j)]:
+for mod, m in MODELS:
     t = pd.DataFrame({"group": o.group, "Annual ET rel. error": rel_err(m),
                       "WS error": m.WS - o.WS, "R error": m.R - o.R,
                       "Dry/wet ratio error": m.dry_wet_ratio - o.dry_wet_ratio,
@@ -167,18 +232,18 @@ def fig2_model_vs_tower():
     fig, axes = plt.subplots(2, 3, figsize=A4L)
     for ax, (k, label) in zip(axes.ravel(), METRICS):
         sel = o.index if k != "CV_annual" else o.index[o.years >= 3]
-        lo = min(o.loc[sel, k].min(), c.loc[sel, k].min(), j.loc[sel, k].min())
-        hi = max(o.loc[sel, k].max(), c.loc[sel, k].max(), j.loc[sel, k].max())
+        lo = min([o.loc[sel, k].min()] + [m.loc[sel, k].min() for mod, m in MODELS])
+        hi = max([o.loc[sel, k].max()] + [m.loc[sel, k].max() for mod, m in MODELS])
         pad = 0.05 * (hi - lo)
         ax.plot([lo - pad, hi + pad], [lo - pad, hi + pad], "k--", lw=0.7)
-        for mod, m in [("CABLE", c), ("JULES", j)]:
+        for mod, m in MODELS:
             ok = o.loc[sel, k].notna() & m.loc[sel, k].notna()      # sites with both values
             r = stats.pearsonr(o.loc[sel, k][ok], m.loc[sel, k][ok])[0] if ok.sum() >= 2 else np.nan
             ax.scatter(o.loc[sel, k], m.loc[sel, k], color=MCOL[mod], s=22, alpha=0.8,
                        label=f"{mod} (r = {r:.2f})")
-        for s in sel:
-            if abs(c.loc[s, k] - o.loc[s, k]) > 0.25 * (hi - lo) or abs(j.loc[s, k] - o.loc[s, k]) > 0.25 * (hi - lo):
-                ax.annotate(s.replace("AU-", ""), (o.loc[s, k], max(c.loc[s, k], j.loc[s, k])),
+        for s in sel:     # label sites where a model is far off
+            if any(abs(m.loc[s, k] - o.loc[s, k]) > 0.25 * (hi - lo) for mod, m in MODELS):
+                ax.annotate(s.replace("AU-", ""), (o.loc[s, k], max(m.loc[s, k] for mod, m in MODELS)),
                             fontsize=6.5, xytext=(2, 2), textcoords="offset points")
         ax.set_title(label)
         ax.set_xlabel("tower")
@@ -198,7 +263,7 @@ def fig4_errors_vs_aridity():
               ("R error (event responsiveness)", lambda m: m.R - o.R, "model - tower"),
               ("Dry/wet-season ratio error", lambda m: m.dry_wet_ratio - o.dry_wet_ratio, "model - tower")]
     for ax, (title, fn, ylab) in zip(axes.ravel(), panels):
-        for mod, m in [("CABLE", c), ("JULES", j)]:
+        for mod, m in MODELS:
             e = fn(m)
             if (o.aridity.notna() & e.notna()).sum() >= 3:
                 rho = stats.spearmanr(o.aridity, e, nan_policy="omit")
@@ -225,8 +290,9 @@ def fig5_group_errors():
     groups = ["Tropical rainforest", "Tropical savanna", "Temperate & subtropical", "Arid & semi-arid"]
     for ax, col in zip(axes, grp["CABLE"].columns):
         y = np.arange(len(groups))
-        ax.barh(y + 0.2, [grp["CABLE"].loc[g, col] for g in groups], 0.38, color=MCOL["CABLE"], label="CABLE")
-        ax.barh(y - 0.2, [grp["JULES"].loc[g, col] for g in groups], 0.38, color=MCOL["JULES"], label="JULES")
+        for mod, shift in zip(grp, [0.2, -0.2]):     # CABLE above, JULES below
+            ax.barh(y + shift, [grp[mod][col].get(g, np.nan) for g in groups], 0.38,
+                    color=MCOL[mod], label=mod)
         ax.axvline(0, color="k", lw=0.7)
         ax.set_yticks(y, [g.replace(" & ", " &\n") for g in groups])
         ax.set_title(col, fontsize=9)
@@ -238,7 +304,7 @@ def fig5_group_errors():
 
 def fig6_seasonal_cycles():
     """Figure 6: mean seasonal cycle of ET at every site."""
-    fig, axes = plt.subplots(6, 4, figsize=A4, sharex=True)
+    fig, axes = grid(len(order) + 1, A4[0], A4[1] / 6, sharex=True)   # +1 panel for the legend
     for ax, s in zip(axes.ravel(), order):
         cs = clim[clim.site == s]
         rain = cs[cs.source == "obs"].sort_values("month")
@@ -247,7 +313,7 @@ def fig6_seasonal_cycles():
         ax2.set_yticks([])
         ax.set_zorder(ax2.get_zorder() + 1)
         ax.patch.set_visible(False)
-        for src in ["obs", "CABLE", "JULES"]:
+        for src in SOURCES:
             t = cs[cs.source == src].sort_values("month")
             ax.plot(t.month, t.ET, color=MCOL[src], lw=1.6 if src == "obs" else 1.1)
         ax.set_title(f"{s} ({o.loc[s, 'veg']}, PET/P {o.loc[s, 'aridity']:.1f})", fontsize=7.5)
@@ -256,7 +322,7 @@ def fig6_seasonal_cycles():
     for ax in axes.ravel()[len(order):]:
         ax.axis("off")
     ax = axes.ravel()[-1]
-    for src in ["obs", "CABLE", "JULES"]:
+    for src in SOURCES:
         ax.plot([], [], color=MCOL[src], label="tower" if src == "obs" else src)
     ax.bar([], [], color="#c6dbef", label="rain (scaled)")
     ax.legend(loc="center", fontsize=8)
@@ -270,8 +336,9 @@ def fig7_site_detail():
     fig, axes = plt.subplots(1, 2, figsize=A4L, gridspec_kw={"width_ratios": [1, 1.6]})
     ax = axes[0]
     y = np.arange(len(order))
-    ax.scatter(tsp_c[order], y + 0.15, color=MCOL["CABLE"], label="CABLE", s=30)
-    ax.scatter(tsp_j[order], y - 0.15, color=MCOL["JULES"], label="JULES", s=30, marker="^")
+    shifts = [0.15, -0.15] if len(MODELS) == 2 else [0]      # side by side, or centred if one model
+    for (mod, m), shift, marker in zip(MODELS, shifts, ["o", "^"]):
+        ax.scatter(tsp[mod][order], y + shift, color=MCOL[mod], label=mod, s=30, marker=marker)
     ax.axvline(0, color="k", lw=0.8)
     ax.set_yticks(y, [f"{s} (tower peak: {o.loc[s, 'TSP']:.0f})" for s in order], fontsize=7)
     ax.set_xticks(range(-4, 5))
@@ -286,17 +353,18 @@ def fig7_site_detail():
             ("R", lambda m: m.R - o.R, 0.4), ("Dry/wet", lambda m: m.dry_wet_ratio - o.dry_wet_ratio, 0.6)]
     mat, labels = [], []
     for name, fn, sc in cols:
-        for mod, m in [("C", c), ("J", j)]:
+        for mod, m in MODELS:
             mat.append((fn(m)[order] / sc).values)
-            labels.append(f"{name}\n{mod}")
+            labels.append(f"{name}\n{mod[0]}")      # C or J
     mat = np.array(mat).T
     im = ax.imshow(mat, cmap="RdBu_r", vmin=-1, vmax=1, aspect="auto")
     ax.set_xticks(range(len(labels)), labels, fontsize=6.5)
     ax.set_yticks(range(len(order)), order, fontsize=7)
     for i in range(mat.shape[0]):
         for k in range(mat.shape[1]):
-            ax.text(k, i, f"{mat[i, k] * cols[k // 2][2]:.2f}", ha="center", va="center", fontsize=5.5)
-    ax.set_title("Errors per site (model - tower); C = CABLE, J = JULES")
+            ax.text(k, i, f"{mat[i, k] * cols[k // len(MODELS)][2]:.2f}", ha="center", va="center", fontsize=5.5)
+    ax.set_title("Errors per site (model - tower); "
+                 + ", ".join(f"{mod[0]} = {mod}" for mod, m in MODELS))
     fig.colorbar(im, ax=ax, shrink=0.6, label="error / scale (red = model too high)")
     fig.suptitle("Figure 7. Site-by-site detail, wettest site at the top", fontsize=12, x=0.06, ha="left")
     fig.tight_layout(rect=(0, 0, 1, 0.95))
@@ -307,12 +375,12 @@ def fig8_energy_closure():
     """Figure 8: model errors vs tower energy gap; raw vs corrected tower ET."""
     fig, axes = plt.subplots(1, 2, figsize=A4L)
     ax = axes[0]
-    for mod, m in [("CABLE", c), ("JULES", j)]:
+    for mod, m in MODELS:
         rho = stats.spearmanr(eb.loc[o.index, "eb_gap_pct"], rel_err(m), nan_policy="omit")
         ax.scatter(eb.loc[o.index, "eb_gap_pct"], rel_err(m), color=MCOL[mod], s=25,
                    label=f"{mod} (rho = {rho.statistic:.2f}, p = {rho.pvalue:.3f})")
     for s in o.index:
-        ax.annotate(s.replace("AU-", ""), (eb.loc[s, "eb_gap_pct"], rel_err(j)[s]), fontsize=6.5,
+        ax.annotate(s.replace("AU-", ""), (eb.loc[s, "eb_gap_pct"], rel_err(MODELS[-1][1])[s]), fontsize=6.5,
                     color="0.4", xytext=(2, 2), textcoords="offset points")
     ax.axhline(0, color="k", lw=0.7)
     ax.set_xlabel("tower energy gap (% extra energy in corrected fluxes)")
@@ -323,8 +391,8 @@ def fig8_energy_closure():
     x = np.arange(len(order))
     ax.plot(x, o.loc[order, "ET_median"], "ks-", ms=4, label="tower (raw)")
     ax.plot(x, eb.loc[order, "ET_obs_cor"], "s--", color="0.5", ms=4, label="tower (energy-balance corrected)")
-    ax.plot(x, c.loc[order, "ET_median"], "o-", color=MCOL["CABLE"], ms=4, label="CABLE")
-    ax.plot(x, j.loc[order, "ET_median"], "^-", color=MCOL["JULES"], ms=4, label="JULES")
+    for (mod, m), style in zip(MODELS, ["o-", "^-"]):
+        ax.plot(x, m.loc[order, "ET_median"], style, color=MCOL[mod], ms=4, label=mod)
     ax.set_xticks(x, [s.replace("AU-", "") for s in order], rotation=70, fontsize=7)
     ax.set_ylabel("median annual ET (mm/yr)")
     ax.set_title("Annual ET: raw vs corrected tower, wettest to driest")
@@ -420,6 +488,25 @@ def sign_map(ax, lon, lat, category, title):
     ax.set_title(title)
 
 
+def single_model_map(col, title, units, sites, lon, lat):
+    """map_<metric>.png when the tables hold one model only: its error at each site."""
+    mod, m = MODELS[0]
+    if col == "TSP":
+        err = month_difference(m.loc[sites, col], o.loc[sites, col])
+    else:
+        err = m.loc[sites, col] - o.loc[sites, col]
+    if err.notna().sum() == 0:
+        print(f"skipped map_{col}.png: no site has a value for it")
+        return
+    fig, ax = plt.subplots(figsize=(7, 5.5), subplot_kw={"projection": MAP_PROJ})
+    error_map(ax, lon, lat, err, np.nanmax(np.abs(err.values)), f"{mod} error ({mod} - obs)", units)
+    fig.suptitle(f"{title}: model errors at {len(sites)} sites", fontsize=13, weight="bold")
+    fig.tight_layout()
+    fig.savefig(FIGS / f"map_{col}.png", dpi=200)
+    plt.close(fig)
+    print(f"wrote {FIGS / f'map_{col}.png'}")
+
+
 def map_figures():
     """One PNG per signature in MAP_METRICS."""
     for col, title, units in MAP_METRICS:
@@ -427,6 +514,11 @@ def map_figures():
         # as everywhere else in this report.
         sites = o.index if col != "CV_annual" else o.index[o.years >= 3]
         lon, lat = o.loc[sites, "lon"], o.loc[sites, "lat"]
+
+        # Without JULES there is only one map: CABLE's error.
+        if len(MODELS) == 1:
+            single_model_map(col, title, units, sites, lon, lat)
+            continue
 
         # Step 1: the errors (model minus obs), and CABLE minus JULES.
         # For TSP the values are months, so subtract the short way round the year.
@@ -472,18 +564,18 @@ def map_figures():
 # the same formula as signature 6 but for one year at a time (from
 # step1_collect_results.py, et_annual.csv). Sites go wettest to driest.
 def ws_annual_all():
-    fig, axes = plt.subplots(6, 4, figsize=(11.69, 14), sharey=True)
+    fig, axes = grid(len(order), 11.69, 14 / 6, sharey=True)
     for ax, site in zip(axes.flat, order):
-        for source in ["obs", "CABLE", "JULES"]:
+        for source in SOURCES:
             one = annual[(annual.site == site) & (annual.source == source)]
             ax.plot(one.year, one.WS, marker="o", markersize=3, color=MCOL[source], label=source)
         ax.axhline(0, color="0.7", linewidth=0.6)
-        ax.set_title(f"{site} ({GROUP[site]})", fontsize=8)
+        ax.set_title(f"{site} ({o.loc[site, 'group']})", fontsize=8)
         ax.xaxis.set_major_locator(matplotlib.ticker.MaxNLocator(integer=True, nbins=4))
         ax.ticklabel_format(axis="x", useOffset=False)     # show 2016, not "0 + 2.016e3"
         ax.tick_params(labelsize=7)
     for ax in axes.flat[len(order):]:
-        ax.axis("off")                     # 22 sites, 24 panels: hide the spare two
+        ax.axis("off")                     # hide the spare panels (22 sites, 24 panels)
     for ax in axes[:, 0]:
         ax.set_ylabel("WS = 1 - ET/PET")
     axes[0, 0].legend(fontsize=7)
@@ -501,9 +593,9 @@ def ws_annual_all():
 # small, so WS swings far below zero when ET is larger than PET; the y axis is
 # cut at -1 and those months run off the bottom of the panel.
 def ws_monthly_all():
-    fig, axes = plt.subplots(6, 4, figsize=(11.69, 14), sharey=True)
+    fig, axes = grid(len(order), 11.69, 14 / 6, sharey=True)
     for ax, site in zip(axes.flat, order):
-        for source in ["obs", "CABLE", "JULES"]:
+        for source in SOURCES:
             one = monthly[(monthly.site == site) & (monthly.source == source)]
             ws = one.set_index("month").WS
             if ws.empty:
@@ -515,7 +607,7 @@ def ws_monthly_all():
             ax.plot(ws.index, ws.values, color=MCOL[source], linewidth=0.8, label=source)
         ax.axhline(0, color="0.7", linewidth=0.6)
         ax.set_ylim(-1, 1)
-        ax.set_title(f"{site} ({GROUP[site]})", fontsize=8)
+        ax.set_title(f"{site} ({o.loc[site, 'group']})", fontsize=8)
         ax.xaxis.set_major_locator(matplotlib.dates.YearLocator(base=2))
         ax.xaxis.set_major_formatter(matplotlib.dates.DateFormatter("%Y"))
         ax.tick_params(labelsize=7)
@@ -534,7 +626,7 @@ def ws_monthly_all():
 
 
 # The same two water stress plots, but one PNG per site, so each site can be
-# looked at on its own at a readable size. Saved into figures/WS_timeseries/:
+# looked at on its own at a readable size. Saved into figures/ws_timeseries/:
 #   <SITE>_WS_annual.png    WS each year   (from et_annual.csv)
 #   <SITE>_WS_monthly.png   WS each month  (from et_monthly.csv)
 def ws_per_site():
@@ -544,14 +636,14 @@ def ws_per_site():
     for site in order:
         # Yearly
         fig, ax = plt.subplots(figsize=(8, 4))
-        for source in ["obs", "CABLE", "JULES"]:
+        for source in SOURCES:
             one = annual[(annual.site == site) & (annual.source == source)]
             ax.plot(one.year, one.WS, marker="o", markersize=4, color=MCOL[source], label=source)
         ax.axhline(0, color="0.7", linewidth=0.6)
         ax.xaxis.set_major_locator(matplotlib.ticker.MaxNLocator(integer=True))
         ax.ticklabel_format(axis="x", useOffset=False)
         ax.set_ylabel("WS = 1 - ET/PET")
-        ax.set_title(f"{site} ({GROUP[site]}): water stress each year")
+        ax.set_title(f"{site} ({o.loc[site, 'group']}): water stress each year")
         ax.legend(fontsize=8)
         fig.tight_layout()
         fig.savefig(WS_DIR / f"{site}_WS_annual.png", dpi=200)
@@ -559,7 +651,7 @@ def ws_per_site():
 
         # Monthly (same gap handling and y limits as the all-sites plot above)
         fig, ax = plt.subplots(figsize=(12, 4))
-        for source in ["obs", "CABLE", "JULES"]:
+        for source in SOURCES:
             one = monthly[(monthly.site == site) & (monthly.source == source)]
             ws = one.set_index("month").WS
             if ws.empty:
@@ -572,7 +664,7 @@ def ws_per_site():
         ax.xaxis.set_major_locator(matplotlib.dates.YearLocator())
         ax.xaxis.set_major_formatter(matplotlib.dates.DateFormatter("%Y"))
         ax.set_ylabel("WS = 1 - ET/PET")
-        ax.set_title(f"{site} ({GROUP[site]}): water stress each month (y axis cut at -1)")
+        ax.set_title(f"{site} ({o.loc[site, 'group']}): water stress each month (y axis cut at -1)")
         ax.legend(fontsize=8)
         fig.tight_layout()
         fig.savefig(WS_DIR / f"{site}_WS_monthly.png", dpi=200)

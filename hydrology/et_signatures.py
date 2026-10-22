@@ -7,13 +7,19 @@ import pandas as pd
 # ============================================================================
 # Settings
 # ============================================================================
-HARMONISED = Path(__file__).resolve().parents[1] / "data" / "harmonised"   # CCRC/data/harmonised
-SOURCES = ["obs", "CABLE", "JULES"]
+# Which data set to analyse. Every hydrology script follows this switch.
+#   "plumber2"  data/harmonised/          22 sites, to 2017. Results in results/, figures/
+#   "fluxnet"   data/harmonised_fluxnet/  40 sites, to 2025. Results in results_fluxnet/, figures_fluxnet/
+DATASET = "fluxnet"
+SUFFIX = "" if DATASET == "plumber2" else "_fluxnet"     # so the two never overwrite each other
+HARMONISED = Path(__file__).resolve().parents[1] / "data" / f"harmonised{SUFFIX}"
+SKIP_SITES = ["AU-Ync"] if DATASET == "plumber2" else []  # PLUMBER2 AU-Ync tower files are a copy of AU-ASM
+SOURCES = ["obs", "CABLE", "JULES"]   # a source missing from a site file is skipped (JULES in fluxnet, for now)
 
 PT_ALPHA = 1.26                  # Priestley-Taylor coefficient
 EVENT_RAIN_MM = 10.0             # rain day threshold for R (mm/day)
 EVENT_WINDOW_DAYS = 10           # look for max ET over days i ... i+10
-MIN_COMPLETE = 0.7               # share of days needed for a month or year to count
+MIN_COMPLETE = 0.8               # share of days needed for a month or year to count
 MIN_MEASURED_PER_DAY = 0.8       # a day counts if >= x% of its steps were measured (qc < 20)
 
 
@@ -137,57 +143,15 @@ def daily_pet(ds):
     return pet
 
 
-# FAO-56 Penman-Monteith reference ET (mm/day). To use it, comment out the
-# daily_pet above and un-comment this one. Same filtering as above; it also
-# needs daily mean VPD and wind.
-# References (Allen, Pereira, Raes & Smith 1998, FAO Irrigation and Drainage
-# Paper 56, https://www.fao.org/4/x0490e/x0490e00.htm):
-#   eq. 6  (p. 24) the daily Penman-Monteith equation used below
-#   eq. 8  (p. 32) gamma = 0.000665 * P
-#   eq. 11 (p. 36) es(T); eq. 13 (p. 37) delta
-#   eq. 42 (p. 54) G is about 0 for daily steps, so it is left out
-#   eq. 47 (p. 56) wind at height z converted to wind at 2 m
-# 0.408 = 1 / 2.45, turning MJ/m2/day of energy into mm/day of water.
-#
-# def daily_pet(ds):
-#     step_seconds = ds.attrs["timestep_s"]
-#     rnet = ds.Rnet.sel(source="obs").to_series()          # W/m2, tower
-#     tair = ds.Tair_C.to_series()                          # degC
-#     psurf_kpa = ds.Psurf.to_series() / 1000               # Pa -> kPa
-#     vpd = ds.VPD_kPa.to_series()                          # kPa, vapour pressure deficit (es - ea)
-#     wind = ds.Wind.to_series()                            # m/s, at the tower's measurement height
-#
-#     daytime = ds.SWdown.to_series() >= DAY_SWDOWN         # True in daylight
-#     rnet_day = measured_daily(rnet * step_seconds / 1e6, is_measured(ds, "Rnet"), daytime, "sum")   # MJ/m2/day
-#     t_day = measured_daily(tair, is_measured(ds, "Tair"), daytime, "mean")
-#     p_day = measured_daily(psurf_kpa, is_measured(ds, "Psurf"), daytime, "mean")
-#     vpd_day = measured_daily(vpd, is_measured(ds, "VPD"), daytime, "mean")
-#     wind_day = measured_daily(wind, is_measured(ds, "Wind"), daytime, "mean")
-#
-#     # Wind at 2 m from wind at height z (eq. 47)
-#     z = float(ds.attrs["reference_height"])               # m
-#     u2 = wind_day * 4.87 / np.log(67.8 * z - 5.42)
-#
-#     es = 0.6108 * np.exp(17.27 * t_day / (t_day + 237.3))       # kPa, saturation vapour pressure (eq. 11)
-#     delta = 4098 * es / (t_day + 237.3) ** 2                    # kPa/degC, slope of es (eq. 13)
-#     gamma = 0.000665 * p_day                                    # kPa/degC, psychrometric constant (eq. 8)
-#
-#     # eq. 6: radiation term + dry-air-and-wind term, over delta + gamma * (1 + 0.34 u2)
-#     radiation_term = 0.408 * delta * rnet_day
-#     aero_term = gamma * 900 / (t_day + 273) * u2 * vpd_day
-#     pet = (radiation_term + aero_term) / (delta + gamma * (1 + 0.34 * u2))   # mm/day
-#     return pet
-
-
 # ============================================================================
 # Step 2c: put ET (every source) and PET on exactly the same days
 # ============================================================================
 def analysis_days(ds):
-    """Daily ET for obs, CABLE and JULES, and daily PET, all on the same days.
+    """Daily ET for obs, CABLE and JULES (those in the file), and daily PET, all on the same days.
     A day is kept only if every source's ET AND PET have a value that day
     (a source can lose a day on its own, e.g. a negative daily total).
     Returns ({source: daily ET}, daily PET)."""
-    et = {source: daily_et(ds, source) for source in SOURCES}
+    et = {source: daily_et(ds, source) for source in SOURCES if source in ds.source.values}
     pet = daily_pet(ds)
     everything = pd.concat(list(et.values()) + [pet], axis=1)    # one column each, same dates
     keep = everything.notna().all(axis=1)                       # True = all have a value

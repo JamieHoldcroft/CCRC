@@ -74,6 +74,19 @@ def load_site(met_path, flux_path):
     if not (ds.time.values == met.time.values).all():
         raise ValueError("Met and Flux files have different time axes")
 
+    # FLUXNET-format files mark missing values with -9999 (e.g. CO2air) without
+    # declaring it as a fill value, so xarray leaves them in.
+    for name in ds.data_vars:
+        if ds[name].dtype.kind == "f" and (ds[name] == -9999).any():
+            ds[name] = ds[name].where(ds[name] != -9999)
+
+    # Some towers do not report every flux (e.g. AU-Tum has no NEE in the
+    # FLUXNET files). Add it as NaN so every site file has the same variables.
+    for var in FLUX_VARS:
+        if var not in ds:
+            ds[var] = xr.full_like(ds.Tair, np.nan, dtype="float64")
+            ds[var].attrs = {"note": "not reported by the tower"}
+
     dt = float(np.median(np.diff(ds.time.values)) / np.timedelta64(1, "s"))
     ds.attrs["timestep_s"] = dt
 

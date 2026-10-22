@@ -8,7 +8,7 @@ Black line = measured Qle, red line and dots = gap-filled Qle.
 "Measured" uses the same rule as the analysis (et_signatures.is_measured:
 qc flag below 20).
 
-Saves to hydrology/figures/gap_filled/<SITE>_<DATE>.png
+Saves to hydrology/figures/gap_filled/<SITE>_<DATE>.png (figures_fluxnet/ for DATASET = "fluxnet")
 """
 
 import argparse
@@ -25,7 +25,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 import et_signatures as ets
 
-OUT = HERE / "figures" / "gap_filled"
+OUT = HERE / f"figures{ets.SUFFIX}" / "gap_filled"
 
 
 def plot_qle(site, date, days):
@@ -72,7 +72,7 @@ def main():
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("site", help="site code, e.g. AU-Tum")
     parser.add_argument("date", help="first day, e.g. 2016-01-15")
-    parser.add_argument("--days", type=int, default=1, help="how many days to show (default 1)")
+    parser.add_argument("--days", type=int, default=3, help="how many days to show (default 1)")
     args = parser.parse_args()
     plot_qle(args.site, args.date, args.days)
 

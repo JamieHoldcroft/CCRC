@@ -32,3 +32,11 @@ env/
 .DS_Store
 Thumbs.db
 desktop.ini
+
+CABLE/
+hydrology/diurnal_cycle.py
+hydrology/et_vs_rain.py
+hydrology/figures_fluxnet/
+hydrology/heat_and_water.py
+hydrology/report_stats.py
+hydrology/results_fluxnet/

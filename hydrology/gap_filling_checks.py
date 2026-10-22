@@ -39,11 +39,13 @@ import matplotlib
 matplotlib.use("Agg")                          # save figures without opening windows
 import matplotlib.pyplot as plt
 
-PLOT_DIR = Path(__file__).resolve().parent / "figures" / "gap_filled"
+PLOT_DIR = Path(__file__).resolve().parent / f"figures{ets.SUFFIX}" / "gap_filled"
 PLOT_DIR.mkdir(parents=True, exist_ok=True)
 
 lost_rows = []
 for path in sorted(ets.HARMONISED.glob("*.nc")):
+    if path.stem in ets.SKIP_SITES:
+        continue
     ds = xr.open_dataset(path)
     et_by_source, pet = ets.analysis_days(ds)
     et = et_by_source["obs"]                       # every source has the same days

@@ -4,7 +4,12 @@ Run from the repo root:
     python scripts/step3_build_harmonised.py AU-Cum AU-How     # named sites
     python scripts/step3_build_harmonised.py --all             # every site in data/flux
 
-For each site also writes, to outputs/build/:
+Add --config to build another dataset. The config says where the obs and model
+files are and where the output goes:
+    python scripts/step3_build_harmonised.py --all --config config/fluxnet.yaml
+        FLUXNET/ + CABLE/  ->  data/harmonised_fluxnet/<SITE>.nc, outputs/build_fluxnet/
+
+For each site also writes, to outputs/build/ (or the config's paths.logs):
     <SITE>_corrections.csv   every change applied to each model (time shift,
                              units, renames, rebuilt variables, missing ones)
     alignment.csv            forcing-echo lag per model x site (should be 0)
@@ -15,18 +20,26 @@ from pathlib import Path
 
 import pandas as pd
 
-from harmonise import build_site, load_config, save
-
-OUT = Path("data/harmonised")
-LOGS = Path("outputs/build")
+from harmonise import build_site, load_config, read_periods, save
 
 
 def main(args):
+    config_path = "config/models.yaml"
+    if "--config" in args:
+        i = args.index("--config")
+        config_path = args[i + 1]
+        args = args[:i] + args[i + 2:]
     if not args:
         sys.exit(__doc__)
+    cfg = load_config(config_path)
+    OUT = Path(cfg["paths"]["out"])
+    LOGS = Path(cfg["paths"]["logs"])
     if args == ["--all"]:
-        args = sorted({p.name.split("_")[0] for p in Path("data/flux").glob("*_Flux.nc")})
-    cfg = load_config()
+        flux_files = Path().glob(cfg["paths"]["flux"].format(site="*"))
+        args = sorted({p.name.split("_")[0] for p in flux_files})
+        if cfg["paths"].get("periods"):   # skip sites marked keep = no
+            periods = read_periods(cfg["paths"]["periods"])
+            args = [s for s in args if s in periods and periods[s][2] != "no"]
     LOGS.mkdir(parents=True, exist_ok=True)
 
     align_path = LOGS / "alignment.csv"

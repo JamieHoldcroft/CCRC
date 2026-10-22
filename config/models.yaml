@@ -27,6 +27,19 @@
 # Units are not set here: scripts/harmonise.py reads each variable's units attribute
 # and converts it (stopping with an error on any unit it does not recognise).
 # Carbon fluxes in kg or g per m2 per s are kg/g of CARBON (confirmed by Jamie).
+#
+# The same build reads config/fluxnet.yaml for the FLUXNET-format data to 2025.
+
+dataset: "PLUMBER2 v1.0 (modelevaluation.org)"
+citation: "Abramowitz et al. (2024) On the predictability of turbulent fluxes from land: PLUMBER2 MIP experimental description and preliminary results. Biogeosciences 21, 5517-5538."
+
+# Where the build finds its inputs and writes its outputs ({site}, {model} are filled in).
+paths:
+  met: "data/met/{site}_*_Met.nc"
+  flux: "data/flux/{site}_*_Flux.nc"
+  model: "data/models/{model}/{site}.nc"
+  out: "data/harmonised"
+  logs: "outputs/build"
 
 models:
   CABLE:

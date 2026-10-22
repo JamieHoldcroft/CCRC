@@ -1,8 +1,9 @@
 """Build one harmonised NetCDF per site: obs + every model on the obs time axis.
 
-    data/harmonised/<SITE>.nc
+    data/harmonised/<SITE>.nc            (config/models.yaml, PLUMBER2)
+    data/harmonised_fluxnet/<SITE>.nc    (config/fluxnet.yaml, FLUXNET format to 2025)
         dims:    source (obs, CABLE, JULES, ...), time (obs time axis)
-        coords:  role(source), family(source)  from config/models.yaml
+        coords:  role(source), family(source)  from the config
         fluxes:  Qle, Qh, Rnet, Qg (W/m2), NEE, GPP (umol CO2/m2/s)  -> (source, time)
         obs:     met forcing, qc flags, measured_* masks, extra obs  -> (time,)
 
@@ -56,14 +57,12 @@ KEEP_ATTRS = ["site_code", "site_name", "country", "site_description",
               "license_type", "acknowledgement"]
 STATIC_VARS = ["latitude", "longitude", "elevation", "reference_height", "canopy_height"]
 
-CITATION = ("Abramowitz et al. (2024) On the predictability of turbulent fluxes from "
-            "land: PLUMBER2 MIP experimental description and preliminary results. "
-            "Biogeosciences 21, 5517-5538.")
 
 
 def load_config(path="config/models.yaml"):
+    """The whole config: dataset, citation, paths and models."""
     with open(path) as fh:
-        return yaml.safe_load(fh)["models"]
+        return yaml.safe_load(fh)
 
 
 def normalise_units(units):
@@ -100,7 +99,9 @@ def model_times(ds, stamp, step_s, extra_steps=0):
     times = pd.DatetimeIndex(times)
     offset = {"start": 0.0, "middle": -0.5, "end": -1.0}[stamp] + extra_steps
     times = times + pd.to_timedelta(offset * step_s, unit="s")
-    return times.round("min")  # float32 axes (CLM5, JULES) wobble by seconds; NaT stays NaT
+    # Snap to the obs step. Time axes stored as float32 wobble: by seconds for CLM5
+    # and JULES, by up to a minute in the new CABLE runs after ~2019. NaT stays NaT.
+    return times.round(f"{round(step_s)}s")
 
 
 def open_model(path, wanted, pft=None, log=None, name=""):
@@ -245,12 +246,33 @@ def git_commit():
         return "unknown"
 
 
-def build_site(site, models_cfg, data_dir=Path("data")):
+def find_file(pattern):
+    """The one file matching a glob pattern such as 'data/met/AU-Cum_*_Met.nc'."""
+    matches = sorted(Path().glob(pattern))
+    if not matches:
+        raise FileNotFoundError(f"no file matches {pattern}")
+    return matches[0]
+
+
+def read_periods(path):
+    """site_periods.csv -> {site: (start_year, end_year, keep)}. keep is yes/maybe/no."""
+    df = pd.read_csv(path)
+    return {r.site: (int(r.start_year), int(r.end_year), str(r.keep).strip())
+            for r in df.itertuples()}
+
+
+def build_site(site, config):
     """Return (harmonised Dataset, correction log DataFrame, alignment DataFrame)."""
-    met = next((data_dir / "met").glob(f"{site}_*_Met.nc"))
-    flux = next((data_dir / "flux").glob(f"{site}_*_Flux.nc"))
+    models_cfg, paths = config["models"], config["paths"]
+    met = find_file(paths["met"].format(site=site))
+    flux = find_file(paths["flux"].format(site=site))
     obs = load_site(met, flux)
     raw_attrs = dict(obs.attrs)
+
+    # Optional: keep only the years the models were run for (paths.periods).
+    period = read_periods(paths["periods"]).get(site) if paths.get("periods") else None
+    if period:
+        obs = obs.sel(time=slice(str(period[0]), str(period[1])))
 
     # load_site recomputes VPD_kPa; keep the file's value for reference.
     ratio = float((obs.VPD / obs.VPD_kPa).where(obs.VPD_kPa > 0.3).median())
@@ -264,7 +286,8 @@ def build_site(site, models_cfg, data_dir=Path("data")):
     for name, cfg in models_cfg.items():
         if cfg["role"] not in ("focus", "lsm", "sensitivity", "benchmark", "baseline"):
             continue
-        path = data_dir / "models" / name / f"{site}.nc"
+        # A model can set its own `path`; otherwise the config's paths.model is used.
+        path = Path(cfg.get("path", paths["model"]).format(model=name, site=site))
         if site in cfg.get("exclude_sites", []):
             log.append((name, "-", "excluded at this site in config/models.yaml"))
             continue
@@ -314,11 +337,12 @@ def build_site(site, models_cfg, data_dir=Path("data")):
         "timestep_s": raw_attrs["timestep_s"],
         "time_convention": "stamp = start of step, local standard time (as the obs files)",
         "start": str(pd.Timestamp(obs.time.values[0])),
+        **({"period_keep": period[2]} if period else {}),
         "end": str(pd.Timestamp(obs.time.values[-1])),
-        "dataset": "PLUMBER2 v1.0 (modelevaluation.org)",
-        "citation": CITATION,
+        "dataset": config["dataset"],
+        "citation": config["citation"],
         "obs_files": f"{met.name}, {flux.name}",
-        "model_files": ", ".join(f"models/{n}/{site}.nc" for n in names[1:]),
+        "model_files": ", ".join(s.attrs["path"] for s in sources[1:]),
         "built": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC"),
         "built_by": "scripts/step3_build_harmonised.py",
         "git_commit": git_commit(),

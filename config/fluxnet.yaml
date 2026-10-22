@@ -1,0 +1,35 @@
+# FLUXNET-format tower data (OzFlux to 2025) and the new CABLE runs.
+# Read by scripts/harmonise.py:
+#     python scripts/step3_build_harmonised.py --all --config config/fluxnet.yaml
+# Same fields as config/models.yaml (see the explanation at the top of that file).
+#
+# Obs qc flags in these files: 0 measured, 1-3 gap-filled (good/medium/poor),
+# 4 ERA-Interim, 5 statistical. measured_<var> is True only for qc 0.
+
+dataset: "FLUXNET2015-format AU sites to 2025, processed with FluxnetLSM (Ukkola)"
+citation: "Ukkola et al. (2017) FluxnetLSM R package (v1.0): a community tool for processing FLUXNET data for use in land surface modelling. Geosci. Model Dev. 10, 3379-3390."
+
+paths:
+  met: "FLUXNET/Met/{site}_*_Met.nc"
+  flux: "FLUXNET/Flux/{site}_*_Flux.nc"
+  model: "data/models_fluxnet/{model}/{site}.nc"   # default; each model below sets its own path
+  periods: "CABLE/site_periods.csv"   # years CABLE was run for; sites with keep = no are skipped
+  out: "data/harmonised_fluxnet"
+  logs: "outputs/build_fluxnet"
+
+models:
+  CABLE:
+    # CABLE main @ 520274f, run on Gadi Oct 2026 (CABLE/running_cable_42_sites.md).
+    # Time stamps are the end of each step (first stamp 00:30), like PLUMBER2 CABLE.
+    role: focus
+    family: CABLE
+    colour: "#1f77b4"
+    stamp: end
+    path: "CABLE/{site}/{site}_out.nc"
+
+  # JULES:
+  #   role: focus
+  #   family: JULES
+  #   colour: "#d62728"
+  #   stamp: end            # check with the forcing-echo lag after the first build
+  #   path: "JULES/{site}/<file name>.nc"

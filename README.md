@@ -28,9 +28,6 @@ python scripts/step1_rename_files.py        # rename raw model files to <SITE>.n
 python scripts/step2_inventory.py           # list time axis, units, variables of every model file
 python scripts/step3_build_harmonised.py --all   # data/harmonised/<SITE>.nc
 python scripts/step4_validate.py            # check the built files, score the models
-python scripts/step5_paper_figures.py       # AU versions of the PLUMBER2 paper figures
-python scripts/step6_benchmark_loss.py      # periods where CABLE/JULES are worse than every benchmark
-python scripts/step7_plot_periods.py        # one figure per period from step 6
 ```
 
 `loaders.py`, `harmonise.py` and `validate.py` are not run on their own; steps 3 and 4 import them.
@@ -46,5 +43,3 @@ python hydrology/step2_make_report.py       # CSVs -> PNGs in hydrology/figures/
 `et_signatures.py` holds the calculations and is imported by the others.
 `plot_gap_filling.py SITE YYYY-MM-DD` zooms in on measured vs gap-filled Qle.
 `gap_filling_checks.py` prints how many days, months and years the gap-filling rules remove per site.
-
-AU-Ync is skipped everywhere: its PLUMBER2 tower files are a copy of AU-ASM.

@@ -1,6 +1,6 @@
 """Generates hydrology/results/ using the functions in hydrology/et_signatures.py.
 
-Writes to hydrology/results/:
+Writes to hydrology/results/ (results_fluxnet/ when DATASET = "fluxnet" in et_signatures.py):
     et_sites.csv         one row per site x source: the Table 2 signatures, the
                          dry/wet-season ratio, and site metadata
     et_monthly_clim.csv  mean monthly ET, rain and PET per site and source
@@ -36,9 +36,9 @@ import et_signatures as ets
 # ============================================================================
 # 1. Settings
 # ============================================================================
-HARMONISED = REPO / "data" / "harmonised"
-RESULTS = HERE / "results"
-SKIP_SITES = ["AU-Ync"]          # its tower files are a copy of AU-ASM
+HARMONISED = ets.HARMONISED              # set by DATASET in et_signatures.py
+RESULTS = HERE / f"results{ets.SUFFIX}"
+SKIP_SITES = ets.SKIP_SITES
 
 
 # ============================================================================
@@ -76,7 +76,8 @@ def site_metadata(ds, site, w):
         "rain_mm_yr": ets.totals(w["rain_daily"], "YS").median(),
         "pet_mm_yr": ets.totals(w["pet_daily"], "YS").median(),
         "tair_mean": float(ds.Tair_C.mean()), "vpd_mean": float(ds.VPD_kPa.mean()),
-        "lai_mean": float(ds.LAI.mean()) if "LAI" in ds else np.nan,
+        "lai_mean": float(ds.LAI.mean()) if "LAI" in ds else           # PLUMBER2
+                    float(ds.LAI_MODIS.mean()) if "LAI_MODIS" in ds else np.nan,   # FLUXNET
         "frac_qle_measured": float(ds.measured_Qle.mean()),
         "dry_months": " ".join(str(m) for m in sorted(w["dry_months"])),
         "wet_months": " ".join(str(m) for m in sorted(w["wet_months"])),
@@ -167,7 +168,7 @@ def main():
         w = site_weather(ds)
         meta = site_metadata(ds, site, w)
 
-        for source in ets.SOURCES:
+        for source in w["aet"]:                      # obs and the models in this file
             aet_daily = w["aet"][source]               # same days for every source
 
             site_rows.append(signature_row(meta, source, aet_daily, w))
